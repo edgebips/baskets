@@ -1,135 +1,202 @@
 #!/usr/bin/env python3
 """Download holdings from Vanguard.
+
+Unfornuately this has to be done via Selenium.
 """
+__author__ = 'Martin Blais <blais@furius.ca>'
 
-symbol = 'VNQ'
-url = "https://advisors.vanguard.com/web/c1/fas-investmentproducts/{symbol}/portfolio".format(symbol=symbol)
-
-import time
-
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-
+from os import path
+from pprint import pprint
+import argparse
+import contextlib
+import csv
+import logging
 import os
-#os.environ['PATH'] = os.getenv('PATH') + ':/usr/lib/chromium-browser'
-#os.environ['PATH'] = os.getenv('PATH') + ':/home/blais/src/geckodriver-v0.21.0-linux64'
-#os.environ['PATH'] = os.getenv('PATH') + ':/home/blais/src'
+import re
+import time
+from typing import Dict
 
+# FIXME: Factor out the Table operations to their own schema; remove Pandas.
+from beancount.utils import csv_utils
+from beancount.projects.export import Table
+from beancount.projects import export as table
+
+import pandas
+import requests
+from selenium import webdriver
+#from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome import options
 
-prefs = {"download.default_directory" : "/tmp/dl"}
 
-# chromeOptions = webdriver.ChromeOptions()
-# chromeOptions.add_experimental_option("prefs", prefs)
-# chromedriver = "path/to/chromedriver.exe"
-# driver = webdriver.Chrome(executable_path=chromedriver, chrome_options=chromeOptions)
-
-
-opts = options.Options()
-opts.add_experimental_option("prefs", prefs)
-#opts.set_headless(True)
-print(opts.to_capabilities())
-
-driver = webdriver.Chrome(executable_path="/home/blais/src/chromedriver", options=opts)
-
-#driver.set_headless(True)
-driver.get(url)
-print(driver.title)
-time.sleep(3)
-
-element = driver.find_element_by_link_text("Holding details")
-print(element)
-element.click()
-
-element = driver.find_element_by_link_text("Export data")
-print(element)
-element.click()
-
-#time.sleep(100)
-
-# elem = driver.find_element_by_name("q")
-# elem.clear()
-# elem.send_keys("pycon")
-# elem.send_keys(Keys.RETURN)
-# assert "No results found." not in driver.page_source
-
-print('closing')
-driver.close()
-print('closed')
+def print_table(table: Table):
+    print(pandas.DataFrame(table.rows).to_string(index=False))
 
 
 
-# import mechanicalsoup
-# browser = mechanicalsoup.StatefulBrowser()
-# browser.open(url)
-# print(browser.get_current_page())
-# #browser.follow_link("Export")
+common_header = ['Ticker', 'Fraction', 'Description']
 
 
-#print(x)
+# FIXME: TODO - Create this in a temp dir.
+DOWNLOADS_DIR = "/tmp/dl"
+
+def create_driver(headless: bool = False):
+    """Create a persistent web driver."""
+    opts = options.Options()
+    # FIXME: TODO - downloads should be a temp directory.
+    prefs = {"download.default_directory" : DOWNLOADS_DIR}
+    opts.add_experimental_option("prefs", prefs)
+    opts.set_headless(headless)
+    return webdriver.Chrome(executable_path="/home/blais/src/chromedriver", options=opts)
+
+
+def get_holdings(driver, download_dir, symbol: str):
+    """Get the list of holdings for Vanguard."""
+
+    url = ("https://advisors.vanguard.com"
+           "/web/c1/fas-investmentproducts/{}/portfolio".format(symbol))
+    logging.info("Fetching %s", url)
+    driver.get(url)
+    time.sleep(2)
+    element = driver.find_element_by_link_text("Holding details")
+    element.click()
+
+    element = driver.find_element_by_link_text("Export data")
+    element.click()
+
+    filenames = abslistdir(download_dir)
+    if len(filenames) != 1:
+        logging.error("Invalid filenames from download: %s", filenames)
+    else:
+        with open(filenames[0]) as infile:
+            contents = infile.read()
+    for filename in filenames:
+        os.remove(filename)
+    return contents
+
+
+# FIXME: Move this to utils.
+def abslistdir(directory):
+    for filename in os.listdir(directory):
+        yield path.join(directory, filename)
+
+
+def load_tables(filename: str) -> Dict[str, Table]:
+    """Load tables from the CSV file."""
+    with open(filename) as infile:
+        reader = csv.reader(infile)
+        rows = list(reader)
+    sections = csv_utils.csv_split_sections_with_titles(rows)
+    table_map = {title: Table(rows[0], rows[1:])
+                 for title, rows in sections.items()}
+    parsers = {
+        'Equity': parse_equity,
+        'Fixed income': parse_fixed_income,
+        'Short-term reserves': parse_shortterm_reserves,
+    }
+    rows = []
+    for title, table in table_map.items():
+        parser = parsers[title]
+        ptable = parser(table)
+        rows.extend(ptable.rows)
+
+    return Table(ptable.header, rows)
+
+
+def pct_to_fraction(string):
+    if re.match(r'<0\.', string):
+        return 0
+    else:
+        return float(string.replace('%', '')) / 100.
+
+
+def parse_equity(table):
+    """Parse the Equity table."""
+    indexes = [table.header.index(name)
+               for name in ['Ticker', '% of funds*', 'Holdings']]
+    ticker_idx, pct_idx, desc_idx = indexes
+    return Table(common_header, [
+        [row[ticker_idx].strip(), pct_to_fraction(row[pct_idx]), row[desc_idx]]
+        for row in table.rows])
+
+
+def parse_fixed_income(table):
+    """Parse the Fixed income table."""
+    indexes = [table.header.index(name)
+               for name in ['SEDOL', '% of funds*', 'Holdings']]
+    ticker_idx, pct_idx, desc_idx = indexes
+    return Table(common_header, [
+        ['SEDOL:{}'.format(row[ticker_idx].strip()), pct_to_fraction(row[pct_idx]), row[desc_idx]]
+        for row in table.rows])
+
+def parse_shortterm_reserves(table):
+    """Parse the Short-term reserves table."""
+    indexes = [table.header.index(name)
+               for name in ['% of funds*', 'Holdings']]
+    pct_idx, desc_idx = indexes
+    return Table(common_header, [
+        ['CASH', pct_to_fraction(row[pct_idx]), row[desc_idx]]
+        for row in table.rows])
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
+    parser = argparse.ArgumentParser(description=__doc__.strip())
+    parser.add_argument('assets_csv',
+                        help=('A CSV file which contains the tickers of assets and '
+                              'number of units'))
+    parser.add_argument('output',
+                        help="Output directory to write all the downloaded files.")
+    parser.add_argument('--headless', action='store_true',
+                        help="Run without poppping up the browser window.")
+    args = parser.parse_args()
+
+    # Clean up the downloads dir.
+    for filename in abslistdir(DOWNLOADS_DIR):
+        logging.error("Removing file: %s", filename)
+        os.remove(filename)
+
+    # Get the list of currencies for this issuer.
+    with open(args.assets_csv) as infile:
+        df = pandas.read_csv(infile)
+    currencies = df['currency']
+    issuers = df['issuer']
+    export = df['export']
+    issuer_currencies = set()
+    for currency, issuer, export in zip(currencies, issuers, export):
+        if issuer != 'Vanguard':
+            continue
+        exch, _, symbol = export.partition(':')
+        if not symbol:
+            symbol = exch
+        issuer_currencies.add((currency, symbol))
+
+    # Fetch baskets for each of those.
+    driver = None
+    for currency, symbol in sorted(issuer_currencies):
+        outfilename = path.join(args.output, '{}.csv'.format(currency))
+        if path.exists(outfilename):
+            logging.info("Skipping %s; already downloaded", currency)
+            continue
+        logging.info("Fetching holdings for %s (via %s)", currency, symbol)
+        driver = driver or create_driver(headless=args.headless)
+        contents = get_holdings(driver, DOWNLOADS_DIR, symbol)
+        with open(outfilename, 'w') as outfile:
+            outfile.write(contents)
+    if driver:
+        driver.close()
+
+    # Extract tables from each downloaded file.
+    norm_table_map = {}
+    for filename in abslistdir(args.output):
+        table = load_tables(filename)
+        norm_table_map[filename] = table
+
+    # Compute a sum-product of the tables.
 
 
 
 
-# import re
-# import mechanize
-
-# symbol = 'VNQ'
-
-# br = mechanize.Browser()
-# br.open("https://advisors.vanguard.com/web/c1/fas-investmentproducts/{symbol}/portfolio".format(symbol))
-# # follow second link with element text matching regular expression
-# response1 = br.follow_link(text_regex=r"cheese\s*shop", nr=1)
-# print(br.title())
-# print(response1.geturl())
-# print(response1.info())  # headers
-# print(response1.read())  # body
-
-# br.select_form(name="order")
-# # Browser passes through unknown attributes (including methods)
-# # to the selected HTMLForm.
-# br["cheeses"] = ["mozzarella", "caerphilly"]  # (the method here is __setitem__)
-# # Submit current form.  Browser calls .close() on the current response on
-# # navigation, so this closes response1
-# response2 = br.submit()
-
-# # print currently selected form (don't call .submit() on this, use br.submit())
-# print(br.form)
-
-# response3 = br.back()  # back to cheese shop (same data as response1)
-# # the history mechanism returns cached response objects
-# # we can still use the response, even though it was .close()d
-# response3.get_data()  # like .seek(0) followed by .read()
-# response4 = br.reload()  # fetches from server
-
-# for form in br.forms():
-#     print(form)
-# # .links() optionally accepts the keyword args of .follow_/.find_link()
-# for link in br.links(url_regex="python.org"):
-#     print(link)
-#     br.follow_link(link)  # takes EITHER Link instance OR keyword args
-#     br.back()
 
 
-
-# # import argparse
-# # import logging
-# # from urllib.parse import unquote
-
-
-# # def main():
-# #     logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
-# #     parser = argparse.ArgumentParser(description=__doc__.strip())
-# #     #parser.add_argument('filenames', nargs='+', help='Filenames')
-# #     args = parser.parse_args()
-
-# #     # ...
-# #     x = unquote('https%3A%2F%2Fadvisors.vanguard.com%2Fweb%2Fc1%2Ffas-investmentproducts%2F0970%2Fportfolio%23&c.&peRelationship=Crossover&fileDownloaded=1&downloadName=csv%3AHolding_details_Total_Stock_Market_ETF_%28VTI%29&downloadLocation=us%3Aen%3Afas%3Aweb%3Aadvisors%3Ainvproducts%3Aportfolio%3A0970&pageName=us%3Aen%3Afas%3Aweb%3Aadvisors%3Ainvproducts%3Aportfolio%3A0970&.c&cc=USD&s=2560x1440&c=24&j=1.6&v=N&k=Y&bw=1787&bh=1352&AQE=1')
-# #     print(x)
-
-
-# # if __name__ == '__main__':
-# #     main()
-
-
-# # 'https://vanguard.d2.sc.omtrdc.net/b/ss/vanguardfaslaunch/1/JS-1.8.0/s22966595702971?AQB=1&ndh=1&pf=1&t=17%2F7%2F2018%202%3A1%3A34%205%20240&mid=06472755307644493300559037431780657247&aid=2D72A7D00530B7C4-60000300803C193C&aamlh=7&ce=ISO-8859-1&ns=vanguard&cdp=2&pageName=us%3Aen%3Afas%3Aweb%3Aadvisors%3Ainvproducts%3Aportfolio%3A0970&g=https%3A%2F%2Fadvisors.vanguard.com%2Fweb%2Fc1%2Ffas-investmentproducts%2F0970%2Fportfolio%23&c.&peRelationship=Crossover&fileDownloaded=1&downloadName=csv%3AHolding_details_Total_Stock_Market_ETF_%28VTI%29&downloadLocation=us%3Aen%3Afas%3Aweb%3Aadvisors%3Ainvproducts%3Aportfolio%3A0970&pageName=us%3Aen%3Afas%3Aweb%3Aadvisors%3Ainvproducts%3Aportfolio%3A0970&.c&cc=USD&s=2560x1440&c=24&j=1.6&v=N&k=Y&bw=1787&bh=1352&AQE=1'
+if __name__ == '__main__':
+    main()
