@@ -4,6 +4,7 @@
 Unfornuately this has to be done via Selenium.
 """
 __author__ = 'Martin Blais <blais@furius.ca>'
+__license__ = "GNU GPLv2"
 
 from os import path
 from pprint import pprint
@@ -18,8 +19,6 @@ from typing import Dict
 
 # FIXME: Factor out the Table operations to their own schema; remove Pandas.
 from beancount.utils import csv_utils
-from beancount.projects.export import Table
-from beancount.projects import export as table
 
 import pandas
 import requests
@@ -27,26 +26,40 @@ from selenium import webdriver
 #from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome import options
 
-
-def print_table(table: Table):
-    print(pandas.DataFrame(table.rows).to_string(index=False))
-
+from baskets import table
+from baskets.table import Table
 
 
-common_header = ['Ticker', 'Fraction', 'Description']
+class AssetsTable(table.DefTable):
+    """An input table for assets.
+    This is the input you provide to list your assets and quantities.
+    """
+    field_types = [
+        ('ticker', str),
+        ('issuer', str),
+        ('quantity', float),
+    ]
+
+
+class HoldingsTable(Table):
+    """A table of downloaded holdings.
+    This is the common output type we convert all the downloads to.
+    """
+    _columns = ['ticker', 'fraction', 'description']
+    _types = [str, float, str]
 
 
 # FIXME: TODO - Create this in a temp dir.
 DOWNLOADS_DIR = "/tmp/dl"
 
-def create_driver(headless: bool = False):
+def create_driver(driver_exec: str, headless: bool = False):
     """Create a persistent web driver."""
     opts = options.Options()
     # FIXME: TODO - downloads should be a temp directory.
     prefs = {"download.default_directory" : DOWNLOADS_DIR}
     opts.add_experimental_option("prefs", prefs)
     opts.set_headless(headless)
-    return webdriver.Chrome(executable_path="/home/blais/src/chromedriver", options=opts)
+    return webdriver.Chrome(executable_path=driver_exec, options=opts)
 
 
 def get_holdings(driver, download_dir, symbol: str):
@@ -99,7 +112,7 @@ def load_tables(filename: str) -> Dict[str, Table]:
         ptable = parser(table)
         rows.extend(ptable.rows)
 
-    return Table(ptable.header, rows)
+    return Table(ptable.columns, rows)
 
 
 def pct_to_fraction(string):
@@ -111,52 +124,58 @@ def pct_to_fraction(string):
 
 def parse_equity(table):
     """Parse the Equity table."""
-    indexes = [table.header.index(name)
+    indexes = [table.columns.index(name)
                for name in ['Ticker', '% of funds*', 'Holdings']]
     ticker_idx, pct_idx, desc_idx = indexes
-    return Table(common_header, [
+    return HoldingsTable([
         [row[ticker_idx].strip(), pct_to_fraction(row[pct_idx]), row[desc_idx]]
         for row in table.rows])
 
 
 def parse_fixed_income(table):
     """Parse the Fixed income table."""
-    indexes = [table.header.index(name)
+    indexes = [table.columns.index(name)
                for name in ['SEDOL', '% of funds*', 'Holdings']]
     ticker_idx, pct_idx, desc_idx = indexes
-    return Table(common_header, [
+    return HoldingsTable([
         ['SEDOL:{}'.format(row[ticker_idx].strip()), pct_to_fraction(row[pct_idx]), row[desc_idx]]
         for row in table.rows])
 
 def parse_shortterm_reserves(table):
     """Parse the Short-term reserves table."""
-    indexes = [table.header.index(name)
+    indexes = [table.columns.index(name)
                for name in ['% of funds*', 'Holdings']]
     pct_idx, desc_idx = indexes
-    return Table(common_header, [
+    return HoldingsTable([
         ['CASH', pct_to_fraction(row[pct_idx]), row[desc_idx]]
         for row in table.rows])
 
 
-def main():
-    logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
-    parser = argparse.ArgumentParser(description=__doc__.strip())
-    parser.add_argument('assets_csv',
-                        help=('A CSV file which contains the tickers of assets and '
-                              'number of units'))
-    parser.add_argument('output',
-                        help="Output directory to write all the downloaded files.")
-    parser.add_argument('--headless', action='store_true',
-                        help="Run without poppping up the browser window.")
-    args = parser.parse_args()
+def load_beancount_assets(filename: str) -> AssetsTable:
+    """Load a file in beancount.projects.export format."""
 
-    # Clean up the downloads dir.
-    for filename in abslistdir(DOWNLOADS_DIR):
-        logging.error("Removing file: %s", filename)
-        os.remove(filename)
+    tbl = table.read(filename)
+    tbl = tbl.select(['currency', 'export', 'number'])
+
+    def clean_ticker(row) -> str:
+        exch, _, symbol = row.export.partition(':')
+        if not symbol:
+            symbol = exch
+        return symbol
+FIXME implement this
+    tbl = tbl.map([('export', clean_ticker)])
+    tbl = tbl.filter(lambda row: bool(row.export))
+    tbl = tbl.filter(lambda row: row.export.startswith('V'))
+    print(tbl)
+    # for currency, export, number in stbl:
+    #     print(currency, export, number)
+
+    raise SystemExit
+
+    return tbl
 
     # Get the list of currencies for this issuer.
-    with open(args.assets_csv) as infile:
+    with open(filename) as infile:
         df = pandas.read_csv(infile)
     currencies = df['currency']
     issuers = df['issuer']
@@ -170,6 +189,34 @@ def main():
             symbol = exch
         issuer_currencies.add((currency, symbol))
 
+
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
+    parser = argparse.ArgumentParser(description=__doc__.strip())
+    parser.add_argument('assets_csv',
+                        help=('A CSV file which contains the tickers of assets and '
+                              'number of units'))
+    parser.add_argument('output',
+                        help="Output directory to write all the downloaded files.")
+    parser.add_argument('--headless', action='store_true',
+                        help="Run without poppping up the browser window.")
+    parser.add_argument('-b', '--driver-exec', action='store',
+                        default="/usr/local/bin/chromedriver",
+                        help="Path to chromedriver executable.")
+    args = parser.parse_args()
+
+    tbl = load_beancount_assets(args.assets_csv)
+    print(tbl)
+    raise SystemExit
+
+
+    # Clean up the downloads dir.
+    for filename in abslistdir(DOWNLOADS_DIR):
+        logging.error("Removing file: %s", filename)
+        os.remove(filename)
+
     # Fetch baskets for each of those.
     driver = None
     for currency, symbol in sorted(issuer_currencies):
@@ -178,7 +225,7 @@ def main():
             logging.info("Skipping %s; already downloaded", currency)
             continue
         logging.info("Fetching holdings for %s (via %s)", currency, symbol)
-        driver = driver or create_driver(headless=args.headless)
+        driver = driver or create_driver(args.driver_exec, headless=args.headless)
         contents = get_holdings(driver, DOWNLOADS_DIR, symbol)
         with open(outfilename, 'w') as outfile:
             outfile.write(contents)
