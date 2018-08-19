@@ -1,4 +1,4 @@
-"""Update the holdings database with missing or the newest files.
+"""Collect the holdings of a portfolio of assets.
 """
 __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
@@ -31,10 +31,7 @@ from baskets import beansupport
 from baskets import utils
 from baskets import driverlib
 from baskets import database
-from baskets.issuers import vanguard
-from baskets.issuers import ishares
-from baskets.issuers import powershares
-from baskets.issuers import spdr
+from baskets import issuers
 
 
 def HoldingsTable(rows):
@@ -51,32 +48,25 @@ def main():
     parser.add_argument('assets_csv',
                         help=('A CSV file which contains the tickers of assets and '
                               'number of units'))
-    parser.add_argument('dbdir',
-                        help="Database directory to write all the downloaded files.")
 
+    parser.add_argument('--dbdir', default=database.DEFAULT_DIR,
+                        help="Database directory to write all the downloaded files.")
     parser.add_argument('--headless', action='store_true',
                         help="Run without poppping up the browser window.")
     parser.add_argument('-b', '--driver-exec', action='store',
                         default="/usr/local/bin/chromedriver",
                         help="Path to chromedriver executable.")
     args = parser.parse_args()
-
     db = database.Database(args.dbdir)
 
     # Load up the list of assets from the exported Beancount file.
     tbl = beansupport.read_exported_assets(args.assets_csv)
 
-    # Supported downloader modules.
-    downloaders = {'Vanguard': vanguard,
-                   'iShares': ishares,
-                   'PowerShares': powershares,
-                   'StateStreet': spdr}
-
     # Fetch baskets for each of those.
     driver = None
     for row in sorted(tbl):
         try:
-            downloader = downloaders[row.issuer]
+            downloader = issuers.MODULES[row.issuer]
         except KeyError:
             logging.info("Missing issuer: %s; Skipping %s", row.issuer, row.ticker)
             continue

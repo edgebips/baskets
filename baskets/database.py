@@ -9,16 +9,15 @@ import datetime
 import os
 
 
+DEFAULT_DIR = path.join(os.environ['HOME'], '.baskets/db')
+
+
 Database = NamedTuple('Database', [('directory', str)])
 
 
 def getdir(db: Database, key: str, date: datetime.date) -> str:
     """Get or create directory."""
     return path.join(db.directory, key, '{:%Y/%m/%d}'.format(date))
-
-## FIXME: remove
-    # os.makedirs(dirpath, exist_ok=True)
-    # return dirpath
 
 
 def getlatest(db: Database, key: str) -> Union[str,type(None)]:
