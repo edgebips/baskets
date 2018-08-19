@@ -34,6 +34,7 @@ from baskets import database
 from baskets.issuers import vanguard
 from baskets.issuers import ishares
 from baskets.issuers import powershares
+from baskets.issuers import spdr
 
 
 def HoldingsTable(rows):
@@ -68,7 +69,8 @@ def main():
     # Supported downloader modules.
     downloaders = {'Vanguard': vanguard,
                    'iShares': ishares,
-                   'PowerShares': powershares}
+                   'PowerShares': powershares,
+                   'StateStreet': spdr}
 
     # Fetch baskets for each of those.
     driver = None
@@ -76,6 +78,7 @@ def main():
         try:
             downloader = downloaders[row.issuer]
         except KeyError:
+            logging.info("Missing issuer: %s; Skipping %s", row.issuer, row.ticker)
             continue
 
         # Check if the file has already been downloaded.
