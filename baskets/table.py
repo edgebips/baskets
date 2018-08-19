@@ -57,6 +57,7 @@ import collections
 import csv
 import datetime
 import io
+import itertools
 import logging
 import re
 import typing
@@ -66,6 +67,8 @@ import pandas
 
 # FIXME: Maybe rename Table -> Schema and DefTable -> Table? How do you link a
 # Table and its schema? Composition?
+
+# FIXME: Implement automatic type inference.
 
 Header = List[str]
 Types = List[type]
@@ -85,11 +88,12 @@ class Table(_Table):
      and list of rows (matching the types)."""
 
     def __new__(cls, columns, types, rows):
-        Row = collections.namedtuple('Row', list(map(idify, columns)))
+        clean_columns = list(itertools.starmap(idify, enumerate(columns)))
+        Row = collections.namedtuple('Row', clean_columns)
         assert len(columns) == len(types)
         if not isinstance(rows[0], Row):
             rows = list(map(Row._make, rows))
-        return _Table.__new__(cls, columns, types, rows, Row)
+        return _Table.__new__(cls, clean_columns, types, rows, Row)
 
     def __str__(self):
         return format(self)
@@ -130,24 +134,28 @@ class Table(_Table):
     #     return _Row
 
 
-class DefTable(Table):
-    """A base class to tables with a fixed set of columns."""
+# class DefTable(Table):
+#     """A base class to tables with a fixed set of columns."""
 
-    # Override this to define your table type.
-    field_types = []
+#     # Override this to define your table type.
+#     field_types = []
 
-    def __new__(cls, rows):
-        columns = [column for column, _ in self.field_types]
-        types = [type_ for _, type_ in self.field_types]
-        Table.__new__(self, columns, types, rows)
+#     def __new__(cls, rows):
+#         columns = [column for column, _ in self.field_types]
+#         types = [type_ for _, type_ in self.field_types]
+#         Table.__new__(self, columns, types, rows)
 
 
-def idify(name: str):
+def idify(index: int, name: str):
     """Coerce string into an identifier. For columns."""
+    if not name:
+        return 'col{:02d}'.format(index)
+    if '%' in name:
+        name = name.replace('%', 'pct')
     name = re.sub('_+', '_', re.sub(r'[^a-zA-Z0-9_]', '_', name)).strip('_')
     if iskeyword(name):
         name = name + '_'
-    return name
+    return name.lower()
 
 
 def select(table: Table, columns: List[str]) -> Table:

@@ -28,25 +28,15 @@ from selenium.webdriver.chrome import options
 
 from baskets import table
 from baskets.table import Table
+from baskets import beansupport
+from baskets import utils
 
 
-# class AssetsTable(table.DefTable):
-#     """An input table for assets.
-#     This is the input you provide to list your assets and quantities.
-#     """
-#     field_types = [
-#         ('ticker', str),
-#         ('issuer', str),
-#         ('quantity', float),
-#     ]
-
-
-class HoldingsTable(Table):
-    """A table of downloaded holdings.
-    This is the common output type we convert all the downloads to.
-    """
-    _columns = ['ticker', 'fraction', 'description']
-    _types = [str, float, str]
+def HoldingsTable(rows):
+    """Normalized extract contents of an holdings file download."""
+    return Table(['ticker', 'fraction', 'description'],
+                 [str, float, str],
+                 rows)
 
 
 # FIXME: TODO - Create this in a temp dir.
@@ -62,6 +52,16 @@ def create_driver(driver_exec: str, headless: bool = False):
     return webdriver.Chrome(executable_path=driver_exec, options=opts)
 
 
+def retry(func, *args):
+    """Autoamtically retry a failed."""
+    while True:
+        try:
+            return func(*args)
+        except selenium.common.exceptions.WebDriverException:
+            time.sleep(1)
+            logging.info("Retrying")
+
+
 def get_holdings(driver, download_dir, symbol: str):
     """Get the list of holdings for Vanguard."""
 
@@ -69,14 +69,14 @@ def get_holdings(driver, download_dir, symbol: str):
            "/web/c1/fas-investmentproducts/{}/portfolio".format(symbol))
     logging.info("Fetching %s", url)
     driver.get(url)
-    time.sleep(2)
-    element = driver.find_element_by_link_text("Holding details")
+
+    retry(driver.find_element_by_link_text, "Holding details")
     element.click()
 
-    element = driver.find_element_by_link_text("Export data")
+    retry(driver.find_element_by_link_text, "Export data")
     element.click()
 
-    filenames = abslistdir(download_dir)
+    filenames = utils.abslistdir(download_dir)
     if len(filenames) != 1:
         logging.error("Invalid filenames from download: %s", filenames)
     else:
@@ -87,19 +87,13 @@ def get_holdings(driver, download_dir, symbol: str):
     return contents
 
 
-# FIXME: Move this to utils.
-def abslistdir(directory):
-    for filename in os.listdir(directory):
-        yield path.join(directory, filename)
-
-
-def load_tables(filename: str) -> Dict[str, Table]:
+def parse_tables(filename: str) -> Dict[str, Table]:
     """Load tables from the CSV file."""
     with open(filename) as infile:
         reader = csv.reader(infile)
         rows = list(reader)
     sections = csv_utils.csv_split_sections_with_titles(rows)
-    table_map = {title: Table(rows[0], rows[1:])
+    table_map = {title: Table(rows[0], [str] * len(rows[0]), rows[1:])
                  for title, rows in sections.items()}
     parsers = {
         'Equity': parse_equity,
@@ -112,7 +106,16 @@ def load_tables(filename: str) -> Dict[str, Table]:
         ptable = parser(table)
         rows.extend(ptable.rows)
 
-    return Table(ptable.columns, rows)
+    return Table(ptable.columns, ptable.types, rows)
+
+
+def normalize_holdings_table(table: Table):
+    """The assets don't actually sum to 100%, normalize them."""
+    total = sum([row.fraction for row in table])
+    if not (0.98 < total < 1.02):
+        logging.error("Total weight seems invalid: {}".format(total))
+    scale = 1. / total
+    return table.map('fraction', lambda f: f*scale)
 
 
 def pct_to_fraction(string):
@@ -125,50 +128,32 @@ def pct_to_fraction(string):
 def parse_equity(table):
     """Parse the Equity table."""
     indexes = [table.columns.index(name)
-               for name in ['Ticker', '% of funds*', 'Holdings']]
+               for name in ['ticker', 'pct_of_funds', 'holdings']]
     ticker_idx, pct_idx, desc_idx = indexes
     return HoldingsTable([
-        [row[ticker_idx].strip(), pct_to_fraction(row[pct_idx]), row[desc_idx]]
+        [row.ticker, pct_to_fraction(row.pct_of_funds), row.holdings]
         for row in table.rows])
 
 
 def parse_fixed_income(table):
     """Parse the Fixed income table."""
     indexes = [table.columns.index(name)
-               for name in ['SEDOL', '% of funds*', 'Holdings']]
+               for name in ['sedol', 'pct_of_funds', 'holdings']]
     ticker_idx, pct_idx, desc_idx = indexes
     return HoldingsTable([
-        ['SEDOL:{}'.format(row[ticker_idx].strip()), pct_to_fraction(row[pct_idx]), row[desc_idx]]
+        ['SEDOL:{}'.format(row.sedol.strip()) if row.sedol != '-' else '',
+         pct_to_fraction(row.pct_of_funds),
+         row.holdings]
         for row in table.rows])
 
 def parse_shortterm_reserves(table):
     """Parse the Short-term reserves table."""
     indexes = [table.columns.index(name)
-               for name in ['% of funds*', 'Holdings']]
+               for name in ['pct_of_funds', 'holdings']]
     pct_idx, desc_idx = indexes
     return HoldingsTable([
-        ['CASH', pct_to_fraction(row[pct_idx]), row[desc_idx]]
+        ['CASH', pct_to_fraction(row.pct_of_funds), row.holdings]
         for row in table.rows])
-
-
-def load_beancount_assets(filename: str) -> Table:
-    """Load a file in beancount.projects.export format."""
-    tbl = table.read_csv(filename)
-    tbl = tbl.select(['export', 'number', 'cost_currency', 'issuer'])
-    def clean_ticker(export) -> str:
-        exch, _, symbol = export.partition(':')
-        if not symbol:
-            symbol = exch
-        return symbol
-    tbl = (tbl
-           .map('number', float)
-           .map('export', clean_ticker)
-           .filter(lambda row: bool(row.export))
-           .filter(lambda row: bool(row.issuer))
-           .group(('export', 'issuer'), 'number', sum)
-           .order(lambda row: (row.issuer, row.export))
-           .rename('export', 'ticker'))
-    return tbl
 
 
 def main():
@@ -187,25 +172,26 @@ def main():
     args = parser.parse_args()
 
     # Load up the list of assets from the exported Beancount file.
-    tbl = load_beancount_assets(args.assets_csv)
-    for row in tbl:
-        print(row.ticker)
+    tbl = beansupport.read_exported_assets(args.assets_csv)
 
     # Clean up the downloads dir.
-    for filename in abslistdir(DOWNLOADS_DIR):
+    for filename in utils.abslistdir(DOWNLOADS_DIR):
         logging.error("Removing file: %s", filename)
         os.remove(filename)
 
     # Fetch baskets for each of those.
     driver = None
-    for currency, symbol in sorted(issuer_currencies):
-        outfilename = path.join(args.output, '{}.csv'.format(currency))
-        if path.exists(outfilename):
-            logging.info("Skipping %s; already downloaded", currency)
+    for row in sorted(tbl):
+        if row.issuer != 'Vanguard':
             continue
-        logging.info("Fetching holdings for %s (via %s)", currency, symbol)
+
+        outfilename = path.join(args.output, '{}.csv'.format(row.ticker))
+        if path.exists(outfilename):
+            logging.info("Skipping %s; already downloaded", row.ticker)
+            continue
+        logging.info("Fetching holdings for %s", row.ticker)
         driver = driver or create_driver(args.driver_exec, headless=args.headless)
-        contents = get_holdings(driver, DOWNLOADS_DIR, symbol)
+        contents = get_holdings(driver, DOWNLOADS_DIR, row.ticker)
         with open(outfilename, 'w') as outfile:
             outfile.write(contents)
     if driver:
@@ -213,9 +199,11 @@ def main():
 
     # Extract tables from each downloaded file.
     norm_table_map = {}
-    for filename in abslistdir(args.output):
-        table = load_tables(filename)
-        norm_table_map[filename] = table
+    _, __, filenames = next(os.walk(args.output))
+    for filename in sorted(path.join(args.output, f) for f in filenames):
+        logging.info("Parsing %s", filename)
+        tbl = parse_tables(filename)
+        norm_table_map[filename] = normalize_holdings_table(tbl)
 
     # Compute a sum-product of the tables.
 
