@@ -1,35 +1,19 @@
-#!/usr/bin/env python3
 """Download holdings from Vanguard.
-
-Unfornuately this has to be done via Selenium.
 """
 __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
-from os import path
-from pprint import pprint
-import argparse
-import contextlib
-import csv
 import logging
-import os
 import re
-import time
 from typing import Dict
 
 # FIXME: Factor out the Table operations to their own schema; remove Pandas.
 from beancount.utils import csv_utils
 
-import pandas
-import requests
 from selenium import webdriver
-#from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome import options
 
 from baskets import table
 from baskets.table import Table
-from baskets import beansupport
-from baskets import utils
 from baskets import driverlib
 from baskets.driverlib import retry
 
@@ -85,7 +69,7 @@ def parse(filename: str) -> Dict[str, Table]:
     return Table(ptable.columns, ptable.types, rows)
 
 
-def normalize_holdings_table(table: Table):
+def normalize_holdings_table(table: Table) -> Table:
     """The assets don't actually sum to 100%, normalize them."""
     total = sum([row.fraction for row in table])
     if not (0.98 < total < 1.02):
@@ -94,27 +78,26 @@ def normalize_holdings_table(table: Table):
     return table.map('fraction', lambda f: f*scale)
 
 
-def pct_to_fraction(string):
+def pct_to_fraction(string: str) -> float:
+    """Convert % column to a fraction."""
     if re.match(r'<0\.', string):
         return 0
     else:
         return float(string.replace('%', '')) / 100.
 
 
-def parse_equity(table):
+def parse_equity(table: Table) -> Table:
     """Parse the Equity table."""
-    indexes = [table.columns.index(name)
-               for name in ['ticker', 'pct_of_funds', 'holdings']]
+    indexes = [table.columns.index(name) for name in ['ticker', 'pct_of_funds', 'holdings']]
     ticker_idx, pct_idx, desc_idx = indexes
     return HoldingsTable([
         [row.ticker, pct_to_fraction(row.pct_of_funds), row.holdings]
         for row in table.rows])
 
 
-def parse_fixed_income(table):
+def parse_fixed_income(table: Table) -> Table:
     """Parse the Fixed income table."""
-    indexes = [table.columns.index(name)
-               for name in ['sedol', 'pct_of_funds', 'holdings']]
+    indexes = [table.columns.index(name) for name in ['sedol', 'pct_of_funds', 'holdings']]
     ticker_idx, pct_idx, desc_idx = indexes
     return HoldingsTable([
         ['SEDOL:{}'.format(row.sedol.strip()) if row.sedol != '-' else '',
@@ -122,10 +105,10 @@ def parse_fixed_income(table):
          row.holdings]
         for row in table.rows])
 
-def parse_shortterm_reserves(table):
+
+def parse_shortterm_reserves(table: Table) -> Table:
     """Parse the Short-term reserves table."""
-    indexes = [table.columns.index(name)
-               for name in ['pct_of_funds', 'holdings']]
+    indexes = [table.columns.index(name) for name in ['pct_of_funds', 'holdings']]
     pct_idx, desc_idx = indexes
     return HoldingsTable([
         ['CASH', pct_to_fraction(row.pct_of_funds), row.holdings]

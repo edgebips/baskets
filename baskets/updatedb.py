@@ -32,6 +32,7 @@ from baskets import utils
 from baskets import driverlib
 from baskets import database
 from baskets.issuers import vanguard
+from baskets.issuers import ishares
 
 
 def HoldingsTable(rows):
@@ -63,22 +64,32 @@ def main():
     # Load up the list of assets from the exported Beancount file.
     tbl = beansupport.read_exported_assets(args.assets_csv)
 
+    # Supported downloader modules.
+    downloaders = {'Vanguard': vanguard,
+                   'iShares': ishares}
+
     # Fetch baskets for each of those.
     driver = None
     for row in sorted(tbl):
-        if row.issuer != 'Vanguard':
+        try:
+            downloader = downloaders[row.issuer]
+        except KeyError:
             continue
 
+        # Check if the file has already been downloaded.
         csvfile = database.getlatest(db, row.ticker)
         if csvfile is not None:
             logging.info("Skipping %s; already downloaded", row.ticker)
             continue
+
+        # Fetch the file.
         csvdir = database.getdir(db, row.ticker, datetime.date.today())
         logging.info("Fetching holdings for %s", row.ticker)
         driver = driver or driverlib.create_driver(args.driver_exec,
                                                    headless=args.headless)
         driverlib.reset(driver)
-        filenames = vanguard.download(driver, row.ticker)
+
+        filenames = downloader.download(driver, row.ticker)
         if filenames is None:
             logging.error("No files found for %s", row.ticker)
             continue
