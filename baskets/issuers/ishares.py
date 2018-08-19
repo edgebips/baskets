@@ -1,4 +1,4 @@
-"""Download holdings from Vanguard.
+"""Download holdings from iShares.
 """
 __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"

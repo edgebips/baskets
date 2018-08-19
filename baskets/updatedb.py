@@ -33,6 +33,7 @@ from baskets import driverlib
 from baskets import database
 from baskets.issuers import vanguard
 from baskets.issuers import ishares
+from baskets.issuers import powershares
 
 
 def HoldingsTable(rows):
@@ -66,7 +67,8 @@ def main():
 
     # Supported downloader modules.
     downloaders = {'Vanguard': vanguard,
-                   'iShares': ishares}
+                   'iShares': ishares,
+                   'PowerShares': powershares}
 
     # Fetch baskets for each of those.
     driver = None
