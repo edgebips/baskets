@@ -31,7 +31,7 @@ from baskets import beansupport
 from baskets import utils
 from baskets import driverlib
 from baskets import database
-from baskets import vanguard_holdings as vanguard
+from baskets.issuers import vanguard
 
 
 def HoldingsTable(rows):
