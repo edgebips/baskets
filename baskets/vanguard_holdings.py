@@ -30,15 +30,15 @@ from baskets import table
 from baskets.table import Table
 
 
-class AssetsTable(table.DefTable):
-    """An input table for assets.
-    This is the input you provide to list your assets and quantities.
-    """
-    field_types = [
-        ('ticker', str),
-        ('issuer', str),
-        ('quantity', float),
-    ]
+# class AssetsTable(table.DefTable):
+#     """An input table for assets.
+#     This is the input you provide to list your assets and quantities.
+#     """
+#     field_types = [
+#         ('ticker', str),
+#         ('issuer', str),
+#         ('quantity', float),
+#     ]
 
 
 class HoldingsTable(Table):
@@ -151,45 +151,24 @@ def parse_shortterm_reserves(table):
         for row in table.rows])
 
 
-def load_beancount_assets(filename: str) -> AssetsTable:
+def load_beancount_assets(filename: str) -> Table:
     """Load a file in beancount.projects.export format."""
-
-    tbl = table.read(filename)
-    tbl = tbl.select(['currency', 'export', 'number'])
-
-    def clean_ticker(row) -> str:
-        exch, _, symbol = row.export.partition(':')
-        if not symbol:
-            symbol = exch
-        return symbol
-FIXME implement this
-    tbl = tbl.map([('export', clean_ticker)])
-    tbl = tbl.filter(lambda row: bool(row.export))
-    tbl = tbl.filter(lambda row: row.export.startswith('V'))
-    print(tbl)
-    # for currency, export, number in stbl:
-    #     print(currency, export, number)
-
-    raise SystemExit
-
-    return tbl
-
-    # Get the list of currencies for this issuer.
-    with open(filename) as infile:
-        df = pandas.read_csv(infile)
-    currencies = df['currency']
-    issuers = df['issuer']
-    export = df['export']
-    issuer_currencies = set()
-    for currency, issuer, export in zip(currencies, issuers, export):
-        if issuer != 'Vanguard':
-            continue
+    tbl = table.read_csv(filename)
+    tbl = tbl.select(['export', 'number', 'cost_currency', 'issuer'])
+    def clean_ticker(export) -> str:
         exch, _, symbol = export.partition(':')
         if not symbol:
             symbol = exch
-        issuer_currencies.add((currency, symbol))
-
-
+        return symbol
+    tbl = (tbl
+           .map('number', float)
+           .map('export', clean_ticker)
+           .filter(lambda row: bool(row.export))
+           .filter(lambda row: bool(row.issuer))
+           .group(('export', 'issuer'), 'number', sum)
+           .order(lambda row: (row.issuer, row.export))
+           .rename('export', 'ticker'))
+    return tbl
 
 
 def main():
@@ -207,10 +186,10 @@ def main():
                         help="Path to chromedriver executable.")
     args = parser.parse_args()
 
+    # Load up the list of assets from the exported Beancount file.
     tbl = load_beancount_assets(args.assets_csv)
-    print(tbl)
-    raise SystemExit
-
+    for row in tbl:
+        print(row.ticker)
 
     # Clean up the downloads dir.
     for filename in abslistdir(DOWNLOADS_DIR):
@@ -239,8 +218,6 @@ def main():
         norm_table_map[filename] = table
 
     # Compute a sum-product of the tables.
-
-
 
 
 
