@@ -30,6 +30,8 @@ from baskets import table
 from baskets.table import Table
 from baskets import beansupport
 from baskets import utils
+from baskets import driverlib
+from baskets.driverlib import retry
 
 
 def HoldingsTable(rows):
@@ -39,55 +41,29 @@ def HoldingsTable(rows):
                  rows)
 
 
-# FIXME: TODO - Create this in a temp dir.
-DOWNLOADS_DIR = "/tmp/dl"
-
-def create_driver(driver_exec: str, headless: bool = False):
-    """Create a persistent web driver."""
-    opts = options.Options()
-    # FIXME: TODO - downloads should be a temp directory.
-    prefs = {"download.default_directory" : DOWNLOADS_DIR}
-    opts.add_experimental_option("prefs", prefs)
-    opts.set_headless(headless)
-    return webdriver.Chrome(executable_path=driver_exec, options=opts)
-
-
-def retry(func, *args):
-    """Autoamtically retry a failed."""
-    while True:
-        try:
-            return func(*args)
-        except selenium.common.exceptions.WebDriverException:
-            time.sleep(1)
-            logging.info("Retrying")
-
-
-def get_holdings(driver, download_dir, symbol: str):
+def download(driver, symbol: str):
     """Get the list of holdings for Vanguard."""
 
     url = ("https://advisors.vanguard.com"
            "/web/c1/fas-investmentproducts/{}/portfolio".format(symbol))
-    logging.info("Fetching %s", url)
+    logging.info("Opening %s", url)
     driver.get(url)
 
-    retry(driver.find_element_by_link_text, "Holding details")
+    logging.info("Selecting Holding details")
+    element = retry(driver.find_element_by_link_text, "Holding details")
     element.click()
 
-    retry(driver.find_element_by_link_text, "Export data")
+    logging.info("Selecting Export data")
+    element = retry(driver.find_element_by_link_text, "Export data")
     element.click()
 
-    filenames = utils.abslistdir(download_dir)
-    if len(filenames) != 1:
-        logging.error("Invalid filenames from download: %s", filenames)
-    else:
-        with open(filenames[0]) as infile:
-            contents = infile.read()
-    for filename in filenames:
-        os.remove(filename)
-    return contents
+    logging.info("Waiting for downloads")
+    driverlib.wait_for_downloads(driver, '.*\.csv$')
+
+    return driverlib.get_downloads(driver)
 
 
-def parse_tables(filename: str) -> Dict[str, Table]:
+def parse(filename: str) -> Dict[str, Table]:
     """Load tables from the CSV file."""
     with open(filename) as infile:
         reader = csv.reader(infile)
@@ -154,61 +130,3 @@ def parse_shortterm_reserves(table):
     return HoldingsTable([
         ['CASH', pct_to_fraction(row.pct_of_funds), row.holdings]
         for row in table.rows])
-
-
-def main():
-    logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
-    parser = argparse.ArgumentParser(description=__doc__.strip())
-    parser.add_argument('assets_csv',
-                        help=('A CSV file which contains the tickers of assets and '
-                              'number of units'))
-    parser.add_argument('output',
-                        help="Output directory to write all the downloaded files.")
-    parser.add_argument('--headless', action='store_true',
-                        help="Run without poppping up the browser window.")
-    parser.add_argument('-b', '--driver-exec', action='store',
-                        default="/usr/local/bin/chromedriver",
-                        help="Path to chromedriver executable.")
-    args = parser.parse_args()
-
-    # Load up the list of assets from the exported Beancount file.
-    tbl = beansupport.read_exported_assets(args.assets_csv)
-
-    # Clean up the downloads dir.
-    for filename in utils.abslistdir(DOWNLOADS_DIR):
-        logging.error("Removing file: %s", filename)
-        os.remove(filename)
-
-    # Fetch baskets for each of those.
-    driver = None
-    for row in sorted(tbl):
-        if row.issuer != 'Vanguard':
-            continue
-
-        outfilename = path.join(args.output, '{}.csv'.format(row.ticker))
-        if path.exists(outfilename):
-            logging.info("Skipping %s; already downloaded", row.ticker)
-            continue
-        logging.info("Fetching holdings for %s", row.ticker)
-        driver = driver or create_driver(args.driver_exec, headless=args.headless)
-        contents = get_holdings(driver, DOWNLOADS_DIR, row.ticker)
-        with open(outfilename, 'w') as outfile:
-            outfile.write(contents)
-    if driver:
-        driver.close()
-
-    # Extract tables from each downloaded file.
-    norm_table_map = {}
-    _, __, filenames = next(os.walk(args.output))
-    for filename in sorted(path.join(args.output, f) for f in filenames):
-        logging.info("Parsing %s", filename)
-        tbl = parse_tables(filename)
-        norm_table_map[filename] = normalize_holdings_table(tbl)
-
-    # Compute a sum-product of the tables.
-
-
-
-
-if __name__ == '__main__':
-    main()

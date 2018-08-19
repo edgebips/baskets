@@ -1,3 +1,9 @@
+"""Misc reusable utiliites."""
+
+__author__ = 'Martin Blais <blais@furius.ca>'
+__license__ = "GNU GPLv2"
+
+
 import os
 from os import path
 
