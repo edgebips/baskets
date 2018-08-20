@@ -64,6 +64,10 @@ import typing
 
 # FIXME: Remove this dependency, this is the whole point of this file.
 import pandas
+import numpy
+
+# FIXME: Handle formatting in the table itself? Some columns as % always would
+# be useful.
 
 # FIXME: Maybe rename Table -> Schema and DefTable -> Table? How do you link a
 # Table and its schema? Composition?
@@ -228,7 +232,17 @@ def values(table: Table, column: str):
     return [row[index] for row in table.rows]
 
 
-def array(*args, **kw): raise NotImplementedError
+def array(table: Table, column: str):
+    """Get a NumPy array of a column's values."""
+    rows = table.rows
+    if not rows:
+        return numpy.empty()
+    else:
+        index = table.columns.index(column)
+        return numpy.fromiter((row[index] for row in rows),
+                              type(rows[0][index]), len(rows))
+
+
 def coltype(*args, **kw): raise NotImplementedError
 def index(*args, **kw): raise NotImplementedError
 
@@ -322,7 +336,7 @@ def append(*args, **kw):   raise NotImplementedError
 
 def format(table: Table):
     """Format the table as aligned ASCII."""
-    return pandas.DataFrame(table.rows, columns=table.columns).to_string(index=False)
+    return pandas.DataFrame(table.rows, columns=table.columns).to_string()
 
 
 def head(table: Table, num: int = 8):
