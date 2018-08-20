@@ -144,8 +144,9 @@ def main():
         rows.append((ticker, amount, description))
     tbl = Table(['ticker', 'amount', 'description'], [str, float, str], rows)
 
-    print(tbl.order('amount', asc=False).head(2048))
-    table.write_csv(tbl, '/tmp/disag.csv')
+    head = tbl.order('amount', asc=False).head(2048)
+    print(head)
+    table.write_csv(head, '/tmp/disag.csv')
 
     # FIXME: BRKB BRK.B
     # FIXME: Group SEDOL's together, many are same name.
