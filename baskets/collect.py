@@ -121,8 +121,14 @@ def main():
             holdings = (downloader.parse(filename)
                         if row.hastickers else
                         downloader.parse(filename, namemap))
+
             #'BND', 'BNDX', 'VBTIX', 'LQD', 'NYF'
             # Fixup missing ticker names.
+            #
+            # FIXME: Remove this and move the mapping from americanfunds.com to
+            # a second loop in here after the collection stage, and do a
+            # two-step train & classify on all the missing symbols.
+            #
             holdings = holdings.update('ticker', lambda row: row.ticker or row.description)
 
             for hrow in holdings:
