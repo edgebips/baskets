@@ -8,10 +8,13 @@ import csv
 import logging
 import re
 import time
+from typing import Dict
 
 from selenium.common import exceptions
 
+from baskets import collect
 from baskets import driverlib
+from baskets.table import Table
 
 
 def gettext(element):
@@ -71,3 +74,45 @@ def download(driver, symbol: str):
         writer.writerows(rows)
 
     return [filename]
+
+
+HAS_TICKERS = False
+
+
+def parse(filename: str, namemap: Dict[str,str]) -> Table:
+    with open(filename) as infile:
+        reader = csv.reader(infile)
+        header = next(reader)
+        rows = list(reader)
+    tbl = (Table(header, [str] * len(header), rows)
+           .map('security_name', str.strip)
+           .map('market_value', clean_amount))
+    total_value = sum(tbl.values('market_value'))
+    tbl = (tbl
+           .create('fraction', lambda row: row.market_value/total_value)
+           .create('ticker', lambda row: match_name(namemap, row)))
+
+    # Calculate how many of the names were matched.
+    matched_fraction = 0
+    for row in tbl:
+        if row.ticker:
+            matched_fraction += row.fraction
+    logging.info("Matched: {:%}".format(matched_fraction))
+
+    return (tbl
+            .rename(('security_name', 'description'))
+            .select(['ticker', 'fraction', 'description']))
+
+
+def match_name(namemap: Dict[str,str], row) -> str:
+    key = collect.normalize_name(row.security_name)
+    tickers = namemap.get(key, None)
+    if tickers and len(tickers) == 1:
+        return next(iter(tickers))
+    return ''
+
+
+def clean_amount(string: str) -> float:
+    """Convert $ amount to a float."""
+    clean_str = string.replace('$', '').replace(',', '')
+    return float(clean_str) if clean_str else D('0')

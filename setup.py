@@ -24,5 +24,8 @@ setup(
 
     install_requires = [
         'requests',
+        'xlrd',
+        'openpyxl',
+        'selenium',
     ]
 )

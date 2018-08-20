@@ -4,11 +4,16 @@ __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
 import time
+import csv
 import logging
+from typing import List
 
 from selenium.common import exceptions
 
+from beancount.utils import csv_utils
+
 from baskets import driverlib
+from baskets.table import Table
 
 
 def download(driver, symbol: str):
@@ -35,7 +40,6 @@ def download(driver, symbol: str):
         element = driver.find_element_by_link_text(symbol)
         element.click()
 
-
     time.sleep(2)
     logging.info("Clicking on portfolio")
     element = driver.find_element_by_link_text("Portfolio")
@@ -50,3 +54,49 @@ def download(driver, symbol: str):
     driverlib.wait_for_downloads(driver, '.*\.csv$')
 
     return driverlib.get_downloads(driver)
+
+
+def parse(filename: str) -> Table:
+    header, outrows = find_table(filename)
+    tbl = (Table(header, [str] * len(header), outrows)
+           .map('market_value', clean_amount))
+    total_value = sum(tbl.values('market_value'))
+    tbl = (tbl
+           .create('fraction', lambda row: row.market_value/total_value)
+           .rename(('name', 'description')))
+    if 'Ticker' in header:
+        tbl = tbl.select(['ticker', 'fraction', 'description'])
+    else:
+        tbl = (tbl
+               .update('sedol', create_ticker)
+               .rename(('sedol', 'ticker'))
+               .select(['ticker', 'fraction', 'description']))
+    return tbl.map('ticker', str.strip)
+
+
+def create_ticker(row):
+    return 'SEDOL:{}'.format(row.sedol.strip()) if row.sedol != '-' else ''
+
+
+def find_table(filename: str) -> List[str]:
+    with open(filename) as infile:
+        reader = csv.reader(infile)
+        for row in reader:
+            if row == ['\xa0']:
+                break
+        else:
+            logging.fatal("Could not find start of table")
+            return
+        header = next(reader)
+        outrows = []
+        for row in reader:
+            if row == ['\xa0']:
+                break
+            outrows.append(row)
+    return header, outrows
+
+
+def clean_amount(string: str) -> float:
+    """Convert $ amount to a float."""
+    clean_str = string.replace('$', '').replace(',', '')
+    return float(clean_str) if clean_str else D('0')

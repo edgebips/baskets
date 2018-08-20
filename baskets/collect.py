@@ -44,6 +44,17 @@ def normalize_holdings_table(table: Table) -> Table:
     return table.map('fraction', lambda f: f*scale)
 
 
+def normalize_name(name: str):
+    """Normalize the company name for most accurate match against name database.
+    We want to be able to use the name as a key."""
+    name = re.sub(r'[^a-z0-9]', ' ', name.lower())
+    name = re.sub(r'\b(ltd|inc|co|corp|plc|llc)\b', '', name)
+    name = re.sub(r' +', ' ', name).strip()
+    #name = tuple(sorted(name.split()))
+    return name
+
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
     parser = argparse.ArgumentParser(description=__doc__.strip())
@@ -52,27 +63,45 @@ def main():
                         help=('A CSV file which contains the tickers of assets and '
                               'number of units'))
 
+    parser.add_argument('-l', '--ignore-shorts', action='store_true',
+                        help="Ignore short positions")
+    parser.add_argument('-o', '--ignore-options', action='store_true',
+                        help="Ignore options positions")
+
     parser.add_argument('--dbdir', default=database.DEFAULT_DIR,
                         help="Database directory to write all the downloaded files.")
     args = parser.parse_args()
     db = database.Database(args.dbdir)
 
     # Load up the list of assets from the exported Beancount file.
-    assets = beansupport.read_exported_assets(args.assets_csv)
+    assets = beansupport.read_exported_assets(args.assets_csv, args.ignore_options)
     assets.checkall(['ticker', 'issuer', 'price', 'number'])
 
-    if 0:
+    def hastickers(row):
+        module = issuers.MODULES.get(row.issuer)
+        if module:
+            return getattr(module, 'HAS_TICKERS', True)
+        return True
+    assets = (assets
+              .create('hastickers', hastickers)
+              .order(lambda row: (not row.hastickers, row.issuer, row.ticker)))
+
+    if 1:
         print()
         print(assets)
         print()
 
     # Fetch baskets for each of those.
     tickermap = collections.defaultdict(list)
-    for row in sorted(assets):
+    namemap = collections.defaultdict(set)
+    for row in assets:
+        if row.number < 0 and args.ignore_shorts:
+            continue
+
         amount = row.number * row.price
         if not row.issuer:
             hrow = (row.ticker, 1.0, row.ticker)
-            tickermap[row.ticker].append((amount, hrow))
+            tickermap[row.ticker].append((amount, hrow, row.ticker))
         else:
             try:
                 downloader = issuers.MODULES[row.issuer]
@@ -89,19 +118,43 @@ def main():
                 logging.error("Parser for %s is not implemented", row.ticker)
                 continue
 
-            holdings = downloader.parse(filename)
+            holdings = (downloader.parse(filename)
+                        if row.hastickers else
+                        downloader.parse(filename, namemap))
+            #'BND', 'BNDX', 'VBTIX', 'LQD', 'NYF'
+            # Fixup missing ticker names.
+            holdings = holdings.update('ticker', lambda row: row.ticker or row.description)
+
             for hrow in holdings:
-                tickermap[hrow.ticker].append((amount, hrow))
+                assert hrow.ticker.strip() == hrow.ticker, hrow.ticker
+                tickermap[hrow.ticker].append((amount, hrow, row.ticker))
+                if hrow.ticker and not re.match(r'SEDOL:', hrow.ticker):
+                    key = normalize_name(hrow.description)
+                    namemap[key].add(hrow.ticker)
 
     rows = []
     for ticker, assetlist in sorted(tickermap.items(), key=lambda item: len(item[1])):
         amount = 0
-        for hamount, hrow in assetlist:
+        for hamount, hrow, basket_ticker in assetlist:
             _, fraction, description = hrow
-            amount += fraction * hamount
+            pos_amount = fraction * hamount
+            amount += pos_amount
+            if DEBUG_TICKER is not None and ticker == DEBUG_TICKER:
+                print(basket_ticker, hrow, pos_amount)
         rows.append((ticker, amount, description))
     tbl = Table(['ticker', 'amount', 'description'], [str, float, str], rows)
-    print(tbl.order('amount', asc=False).head(64))
+
+    print(tbl.order('amount', asc=False).head(2048))
+    table.write_csv(tbl, '/tmp/disag.csv')
+
+    # FIXME: BRKB BRK.B
+    # FIXME: Group SEDOL's together, many are same name.
+    #print(tbl.order('amount', asc=False).head(2048).map('description', str.lower).order('description'))
+
+
+DEBUG_TICKER = None # 'AAPL'
+DEBUG_TICKER = 'AMAZON.COM INC'
+#DEBUG_TICKER = ''
 
 
 if __name__ == '__main__':

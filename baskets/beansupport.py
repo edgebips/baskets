@@ -22,9 +22,12 @@ def safefloat(v: str):
     return float(v) if v else 1.
 
 
-def read_exported_assets(filename: str) -> table.Table:
+def read_exported_assets(filename: str, ignore_options: bool = False) -> table.Table:
     """Load a file in beancount.projects.export format."""
-    tbl = (table.read_csv(filename)
+    tbl = table.read_csv(filename)
+    if ignore_options:
+        tbl = tbl.filter(lambda row: row.assetcls != 'Options')
+    tbl = (tbl
            .select(['currency', 'cost_currency', 'export',
                     'number', 'issuer',
                     'price_file', 'rate_file'])

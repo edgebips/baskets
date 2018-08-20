@@ -236,7 +236,9 @@ def index(*args, **kw): raise NotImplementedError
 def rename(table: Table, *namepairs: Tuple[Tuple[str]]) -> Table:
     """Rename a column."""
     columns = list(table.columns)
-    for oldname, newname in namepairs:
+    for namepair in namepairs:
+        assert isinstance(namepair, (tuple, list))
+        oldname, newname = namepair
         index = table.columns.index(oldname)
         columns[index] = newname
     return Table(columns, table.types, table.rows)
@@ -427,12 +429,19 @@ def read_csv(infile: Union[str,io.TextIOBase]) -> Table:
     return Table(header, types, rows)
 
 
-def write_csv(table: Table, outfile: str):
+def write_csv(table: Table, outfile: Union[str,io.TextIOBase]):
     """Write a table to a CSV file."""
-    with outfile:
+    close = False
+    if isinstance(outfile, str):
+        close = True
+        outfile = open(outfile, 'w')
+    try:
         writer = csv.writer(outfile)
         writer.writerow(table.columns)
         writer.writerows(table.rows)
+    finally:
+        if close:
+            outfile.close()
 
 
 # FIXME: Powerful select() variant which can create new columns.
