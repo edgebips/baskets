@@ -21,7 +21,7 @@ Column Ops: You can perform some operations on the columns of a table:
 - delete: You can delete columms.
 - get: You can get a list of all the values in a column.
 - array: You can get a NumPy array of the values in a column (e.g., for plotting).
-- type: You can get the type of a column by name.
+- coltype: You can get the type of a column by name.
 - index: You can create an index of the rows from the unique values in a column.
 
 Row Ops: You can perform some operations on the rows of a table:
@@ -38,7 +38,7 @@ Table Ops: You can perform some operations on a table:
 - join: You can join two tables on a condition (e.g. same column).
 - read_csv: You can read a table from a CSV file.
 - write_csv: You can write a table to a CSV file.
-- decl (assert): You can assert the columns and/or types of a table.
+- check: You can assert the existence of columns and/or types of a table.
 
 This summarizes the entire interface and all this functionality is implemented
 in this one file. The operations can be invoked as function and most of them are
@@ -98,15 +98,18 @@ class Table(_Table):
     def __str__(self):
         return format(self)
 
+    def __len__(self):
+        return len(self.rows)
+
     # Column operations.
     def select(self, *args, **kw):   return select(self, *args, **kw)
     def create(self, *args, **kw):   return create(self, *args, **kw)
     def update(self, *args, **kw):   return update(self, *args, **kw)
     def map(self, *args, **kw):      return map_(self, *args, **kw)
     def delete(self, *args, **kw):   return delete(self, *args, **kw)
-    def get(self, *args, **kw):      return get(self, *args, **kw)
-    def getarray(self, *args, **kw): return getarray(self, *args, **kw)
-    def type(self, *args, **kw):     return type(self, *args, **kw)
+    def values(self, *args, **kw):   return values(self, *args, **kw)
+    def array(self, *args, **kw):    return array(self, *args, **kw)
+    def coltype(self, *args, **kw):  return coltype(self, *args, **kw)
     def index(self, *args, **kw):    return index(self, *args, **kw)
     def rename(self, *args, **kw):   return rename(self, *args, **kw)
 
@@ -121,8 +124,11 @@ class Table(_Table):
 
     # Table operations.
     def format(self, *args, **kw):   return format(self, *args, **kw)
+    def head(self, *args, **kw):     return head(self, *args, **kw)
+    def concat(self, *args, **kw):   return concat(self, *args, **kw)
     def join(self, *args, **kw):     return join(self, *args, **kw)
-    def decl(self, *args, **kw):     return decl(self, *args, **kw)
+    def check(self, *args, **kw):    return check(self, *args, **kw)
+    def checkall(self, *args, **kw): return checkall(self, *args, **kw)
 
     # @property
     # def Row(self):
@@ -204,18 +210,35 @@ def map_(table: Table, column: str, mapfunc: Callable) -> Table:
     return update(table, column, lambda row: mapfunc(getattr(row, column)))
 
 
-def delete(*args, **kw):   raise NotImplementedError
-def get(*args, **kw):      raise NotImplementedError
-def getarray(*args, **kw): raise NotImplementedError
-def type(*args, **kw):     raise NotImplementedError
-def index(*args, **kw):    raise NotImplementedError
+def delete(table: Table, columns: List[str]) -> Table:
+    """Delete one or more columns."""
+    indexes = [index
+               for index, column in enumerate(table.columns)
+               if column not in columns]
+    columns = [table.columns[index] for index in indexes]
+    types = [table.types[index] for index in indexes]
+    return Table(columns, types,
+                 [[row[index] for index in indexes]
+                  for row in table.rows])
 
 
-def rename(table: Table, oldname: str, newname: str):
+def values(table: Table, column: str):
+    """Get a column's list of values."""
+    index = table.columns.index(column)
+    return [row[index] for row in table.rows]
+
+
+def array(*args, **kw): raise NotImplementedError
+def coltype(*args, **kw): raise NotImplementedError
+def index(*args, **kw): raise NotImplementedError
+
+
+def rename(table: Table, *namepairs: Tuple[Tuple[str]]) -> Table:
     """Rename a column."""
-    index = table.columns.index(oldname)
     columns = list(table.columns)
-    columns[index] = newname
+    for oldname, newname in namepairs:
+        index = table.columns.index(oldname)
+        columns[index] = newname
     return Table(columns, table.types, table.rows)
 
 
@@ -282,9 +305,13 @@ def group(table: Table,
     return Table(columns, types,  rows)
 
 
-def order(table: Table, key: Callable) -> Table:
+def order(table: Table, key: Union[str,Callable], asc: bool = True) -> Table:
     """Reorder the rows of a table."""
-    return Table(table.columns, table.types, sorted(table.rows, key=key))
+    if isinstance(key, str):
+        index = table.columns.index(key)
+        key = lambda row, i=index: row[i]
+    return Table(table.columns, table.types,
+                 sorted(table.rows, key=key, reverse=(not asc)))
 
 
 def pivot(*args, **kw):    raise NotImplementedError
@@ -296,8 +323,37 @@ def format(table: Table):
     return pandas.DataFrame(table.rows, columns=table.columns).to_string(index=False)
 
 
+def head(table: Table, num: int = 8):
+    """Return the first 'num' rows of the table."""
+    return Table(table.columns, table.types, table.rows[:num])
+
+
+def concat(*tables: Tuple[Table]):
+    """Return the first 'num' rows of the table."""
+    table1 = tables[0]
+    rows = list(table1.rows)
+    for table2 in tables[1:]:
+        assert table2.columns == table1.columns
+        assert table2.types == table1.types
+        rows.extend(table2.rows)
+    return Table(table1.columns, table1.types, rows)
+
+
 def join(*args, **kw):     raise NotImplementedError
-def decl(*args, **kw):     raise NotImplementedError
+
+
+def check(table: Table, columns: List[str]):
+    """Assert the existence of some columns."""
+    for column in columns:
+        assert column in table.columns
+    return table
+
+
+def checkall(table: Table, columns: List[str]):
+    """Assert the existence of some columns."""
+    if columns != table.columns:
+        raise AssertionError("Differing columns: {} != {}".format(table.columns, columns))
+    return table
 
 
 ##def leftjoin(main_table: Table, *col_tables: Tuple[Tuple[Tuple[str], Table]]) -> Table:

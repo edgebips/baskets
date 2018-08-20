@@ -7,6 +7,7 @@ from os import path
 from pprint import pprint
 from typing import Dict
 import argparse
+import collections
 import contextlib
 import csv
 import datetime
@@ -34,11 +35,13 @@ from baskets import database
 from baskets import issuers
 
 
-def HoldingsTable(rows):
-    """Normalized extract contents of an holdings file download."""
-    return Table(['ticker', 'fraction', 'description'],
-                 [str, float, str],
-                 rows)
+def normalize_holdings_table(table: Table) -> Table:
+    """The assets don't actually sum to 100%, normalize them."""
+    total = sum([row.fraction for row in table])
+    if not (0.98 < total < 1.02):
+        logging.error("Total weight seems invalid: {}".format(total))
+    scale = 1. / total
+    return table.map('fraction', lambda f: f*scale)
 
 
 def main():
@@ -55,41 +58,50 @@ def main():
     db = database.Database(args.dbdir)
 
     # Load up the list of assets from the exported Beancount file.
-    tbl = beansupport.read_exported_assets(args.assets_csv)
+    assets = beansupport.read_exported_assets(args.assets_csv)
+    assets.checkall(['ticker', 'issuer', 'price', 'number'])
+
+    if 0:
+        print()
+        print(assets)
+        print()
 
     # Fetch baskets for each of those.
-    driver = None
-    for row in sorted(tbl):
-        try:
-            downloader = issuers.MODULES[row.issuer]
-        except KeyError:
-            logging.fatal("Missing issuer: %s; Skipping %s", row.issuer, row.ticker)
-            continue
+    tickermap = collections.defaultdict(list)
+    for row in sorted(assets):
+        amount = row.number * row.price
+        if not row.issuer:
+            hrow = (row.ticker, 1.0, row.ticker)
+            tickermap[row.ticker].append((amount, hrow))
+        else:
+            try:
+                downloader = issuers.MODULES[row.issuer]
+            except KeyError:
+                logging.error("Missing issuer %s", row.issuer)
+                continue
 
-        # Check if the file has already been downloaded.
-        csvfile = database.getlatest(db, row.ticker)
-        if csvfile is None:
-            logging.fatal("Missing file for %s", row.ticker)
-            continue
+            filename = database.getlatest(db, row.ticker)
+            if filename is None:
+                logging.error("Missing file for %s", row.ticker)
+                continue
 
-    #     # Fetch the file.
-    #     csvdir = database.getdir(db, row.ticker, datetime.date.today())
-    #     logging.info("Fetching holdings for %s", row.ticker)
-    #     driver = driver or driverlib.create_driver(args.driver_exec,
-    #                                                headless=args.headless)
-    #     driverlib.reset(driver)
+            if not hasattr(downloader, 'parse'):
+                logging.error("Parser for %s is not implemented", row.ticker)
+                continue
 
-    #     filenames = downloader.download(driver, row.ticker)
-    #     if filenames is None:
-    #         logging.error("No files found for %s", row.ticker)
-    #         continue
-    #     os.makedirs(csvdir, exist_ok=True)
-    #     for filename in filenames:
-    #         dst = path.join(csvdir, path.basename(filename))
-    #         logging.info("Copying %s -> %s", filename, dst)
-    #         shutil.copyfile(filename, dst)
-    # if driver:
-    #     driver.close()
+            holdings = downloader.parse(filename)
+            for hrow in holdings:
+                tickermap[hrow.ticker].append((amount, hrow))
+
+    rows = []
+    for ticker, assetlist in sorted(tickermap.items(), key=lambda item: len(item[1])):
+        amount = 0
+        for hamount, hrow in assetlist:
+            _, fraction, description = hrow
+            amount += fraction * hamount
+        rows.append((ticker, amount, description))
+    tbl = Table(['ticker', 'amount', 'description'], [str, float, str], rows)
+    print(tbl.order('amount', asc=False).head(64))
 
 
 if __name__ == '__main__':

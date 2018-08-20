@@ -8,4 +8,4 @@ MODULES = {'Vanguard': vanguard,
            'iShares': ishares,
            'PowerShares': powershares,
            'StateStreet': spdr,
-           'American Funds': americanfunds}
+           'AmericanFunds': americanfunds}

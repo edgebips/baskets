@@ -35,7 +35,7 @@ from baskets import issuers
 
 
 def HoldingsTable(rows):
-    """Normalized extract contents of an holdings file download."""
+    """Normalized extracted contents of an holdings file download."""
     return Table(['ticker', 'fraction', 'description'],
                  [str, float, str],
                  rows)
@@ -60,15 +60,15 @@ def main():
     db = database.Database(args.dbdir)
 
     # Load up the list of assets from the exported Beancount file.
-    tbl = beansupport.read_exported_assets(args.assets_csv)
+    assets = beansupport.read_exported_assets(args.assets_csv)
 
     # Fetch baskets for each of those.
     driver = None
-    for row in sorted(tbl):
+    for row in sorted(assets):
         try:
             downloader = issuers.MODULES[row.issuer]
         except KeyError:
-            logging.info("Missing issuer: %s; Skipping %s", row.issuer, row.ticker)
+            logging.error("Missing issuer: %s; Skipping %s", row.issuer, row.ticker)
             continue
 
         # Check if the file has already been downloaded.

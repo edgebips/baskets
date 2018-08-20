@@ -5,7 +5,9 @@ __license__ = "GNU GPLv2"
 
 import logging
 import re
+import csv
 from typing import Dict
+from decimal import Decimal as D
 
 # FIXME: Factor out the Table operations to their own schema; remove Pandas.
 from beancount.utils import csv_utils
@@ -16,13 +18,6 @@ from baskets import table
 from baskets.table import Table
 from baskets import driverlib
 from baskets.driverlib import retry
-
-
-def HoldingsTable(rows):
-    """Normalized extract contents of an holdings file download."""
-    return Table(['ticker', 'fraction', 'description'],
-                 [str, float, str],
-                 rows)
 
 
 def download(driver, symbol: str):
@@ -60,22 +55,22 @@ def parse(filename: str) -> Dict[str, Table]:
         'Fixed income': parse_fixed_income,
         'Short-term reserves': parse_shortterm_reserves,
     }
-    rows = []
-    for title, table in table_map.items():
+    tables = []
+    values_columns = ['ticker', 'market_value', 'holdings']
+    for title, tbl in table_map.items():
         parser = parsers[title]
-        ptable = parser(table)
-        rows.extend(ptable.rows)
+        subtbl = parser(tbl)
+        subtbl.checkall(values_columns)
+        tables.append(subtbl)
 
-    return Table(ptable.columns, ptable.types, rows)
-
-
-def normalize_holdings_table(table: Table) -> Table:
-    """The assets don't actually sum to 100%, normalize them."""
-    total = sum([row.fraction for row in table])
-    if not (0.98 < total < 1.02):
-        logging.error("Total weight seems invalid: {}".format(total))
-    scale = 1. / total
-    return table.map('fraction', lambda f: f*scale)
+    values_table = table.concat(*tables)
+    market_value = values_table.values('market_value')
+    total_value = sum(market_value)
+    tbl = (values_table
+           .map('ticker', str.strip)
+           .create('fraction', lambda row: row.market_value/total_value)
+           .rename(('holdings', 'description')))
+    return tbl.select(['ticker', 'fraction', 'description'])
 
 
 def pct_to_fraction(string: str) -> float:
@@ -86,30 +81,41 @@ def pct_to_fraction(string: str) -> float:
         return float(string.replace('%', '')) / 100.
 
 
+def clean_amount(string: str) -> float:
+    """Convert $ amount to a float."""
+    clean_str = string.replace('$', '').replace(',', '')
+    return float(clean_str) if clean_str else D('0')
+
+
 def parse_equity(table: Table) -> Table:
     """Parse the Equity table."""
-    indexes = [table.columns.index(name) for name in ['ticker', 'pct_of_funds', 'holdings']]
-    ticker_idx, pct_idx, desc_idx = indexes
-    return HoldingsTable([
-        [row.ticker, pct_to_fraction(row.pct_of_funds), row.holdings]
-        for row in table.rows])
+    return (table
+            .map('market_value', clean_amount)
+            .select(['ticker', 'market_value', 'holdings']))
 
 
 def parse_fixed_income(table: Table) -> Table:
     """Parse the Fixed income table."""
-    indexes = [table.columns.index(name) for name in ['sedol', 'pct_of_funds', 'holdings']]
-    ticker_idx, pct_idx, desc_idx = indexes
-    return HoldingsTable([
-        ['SEDOL:{}'.format(row.sedol.strip()) if row.sedol != '-' else '',
-         pct_to_fraction(row.pct_of_funds),
-         row.holdings]
-        for row in table.rows])
+    def create_ticker(row):
+        return 'SEDOL:{}'.format(row.sedol.strip()) if row.sedol != '-' else ''
+    return (table
+            .map('market_value', clean_amount)
+            .create('ticker', create_ticker)
+            .select(['ticker', 'market_value', 'holdings']))
 
 
 def parse_shortterm_reserves(table: Table) -> Table:
     """Parse the Short-term reserves table."""
-    indexes = [table.columns.index(name) for name in ['pct_of_funds', 'holdings']]
-    pct_idx, desc_idx = indexes
-    return HoldingsTable([
-        ['CASH', pct_to_fraction(row.pct_of_funds), row.holdings]
-        for row in table.rows])
+    index = None
+    for fname in 'face_amount', 'face_amount_local_currency':
+        try:
+            index = table.columns.index(fname)
+            break
+        except ValueError:
+            pass
+    assert index is not None
+    return (table
+         .map(fname, clean_amount)
+         .rename((fname, 'market_value'),
+                 ('sedol', 'ticker'))
+         .select(['ticker', 'market_value', 'holdings']))
