@@ -1,10 +1,6 @@
-- Allocate [<0.01 evenly to match 1.00 sum
 - Add sectors and currencies
 - Compute additional diversification measure
 - Download spreadsheet of strategies allocation (to csv) and evaluate and compare via join
-- Multithread and pull all universe
+- Multithread gathering
 - Build reverse index: given a stock which positions does it come from
-- Table as a library and add types
-- Remove dependency on beancount
 - Define STD format for list of positions
-- Date all downloads, keep all past dates, so that in theory a DB could be built

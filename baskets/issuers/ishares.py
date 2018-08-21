@@ -61,21 +61,21 @@ def parse(filename: str) -> Table:
     tbl = (Table(header, [str] * len(header), outrows)
            .map('market_value', clean_amount))
     total_value = sum(tbl.values('market_value'))
-    tbl = (tbl
-           .create('fraction', lambda row: row.market_value/total_value)
-           .rename(('name', 'description')))
+    tbl = tbl.create('fraction', lambda row: row.market_value/total_value)
     if 'Ticker' in header:
-        tbl = tbl.select(['ticker', 'fraction', 'description'])
+        tbl = tbl.select(['ticker', 'fraction', 'name'])
     else:
         tbl = (tbl
-               .update('sedol', create_ticker)
-               .rename(('sedol', 'ticker'))
-               .select(['ticker', 'fraction', 'description']))
-    return tbl.map('ticker', str.strip)
+               .update('name', update_name)
+               .create('ticker', lambda _: '')
+               .select(['ticker', 'fraction', 'name']))
+    return (tbl
+            .map('ticker', str.strip)
+            .rename(('name', 'description')))
 
 
-def create_ticker(row):
-    return 'SEDOL:{}'.format(row.sedol.strip()) if row.sedol != '-' else ''
+def update_name(row):
+    return 'BOND: {}'.format(row.name)
 
 
 def find_table(filename: str) -> List[str]:

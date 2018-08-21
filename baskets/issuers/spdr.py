@@ -48,7 +48,7 @@ def parse(filename: str) -> Table:
            .select(['ticker', 'fraction', 'description'])
            )
     total_value = sum(tbl.values('fraction'))
-    if not (0.99 <= total_value <= 1.01):
+    if not (99 <= total_value <= 101):
         logging.error("Total value is invalid: %s", total_value)
     return tbl.map('fraction', lambda f: f/total_value)
 

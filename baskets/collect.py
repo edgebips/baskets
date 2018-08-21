@@ -129,7 +129,11 @@ def main():
             # a second loop in here after the collection stage, and do a
             # two-step train & classify on all the missing symbols.
             #
-            holdings = holdings.update('ticker', lambda row: row.ticker or row.description)
+            if 0:
+                for v in holdings.values('ticker'):
+                    if v and not re.match(r'[A-Z0-9.]+$', v):
+                        print(v, filename)
+                #holdings = holdings.update('ticker', lambda row: row.ticker or row.description)
 
             for hrow in holdings:
                 assert hrow.ticker.strip() == hrow.ticker, hrow.ticker
@@ -158,9 +162,13 @@ def main():
     # FIXME: Group SEDOL's together, many are same name.
     #print(tbl.order('amount', asc=False).head(2048).map('description', str.lower).order('description'))
 
+    # FIXME: Include SEDOL as a column to help matching.
+    # FIXME: Include ISIN as a column to help matching.
+    # FIXME: Rename 'description' to 'name' everywhere.
+
 
 DEBUG_TICKER = None # 'AAPL'
-DEBUG_TICKER = 'AMAZON.COM INC'
+#DEBUG_TICKER = 'AMAZON.COM INC'
 #DEBUG_TICKER = ''
 
 

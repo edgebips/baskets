@@ -94,15 +94,16 @@ def parse_equity(table: Table) -> Table:
             .select(['ticker', 'market_value', 'holdings']))
 
 
-def create_ticker(row):
-    return 'SEDOL:{}'.format(row.sedol.strip()) if row.sedol != '-' else ''
+def update_name(row):
+    return 'BOND: {}'.format(row.holdings)
 
 
 def parse_fixed_income(table: Table) -> Table:
     """Parse the Fixed income table."""
     return (table
             .map('market_value', clean_amount)
-            .create('ticker', create_ticker)
+            .create('ticker', lambda _: '')
+            .update('holdings', update_name)
             .select(['ticker', 'market_value', 'holdings']))
 
 
