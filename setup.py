@@ -27,5 +27,8 @@ setup(
         'xlrd',
         'openpyxl',
         'selenium',
+        'networkx',
+        'numpy',
+        'pandas',
     ]
 )

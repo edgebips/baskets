@@ -20,6 +20,7 @@ import time
 # FIXME: Factor out the Table operations to their own schema; remove Pandas.
 from beancount.utils import csv_utils
 
+import numpy
 import pandas
 import requests
 from selenium import webdriver
@@ -33,6 +34,7 @@ from baskets import utils
 from baskets import driverlib
 from baskets import database
 from baskets import issuers
+from baskets import graph
 
 
 def normalize_holdings_table(table: Table) -> Table:
@@ -44,19 +46,9 @@ def normalize_holdings_table(table: Table) -> Table:
     return table.map('fraction', lambda f: f*scale)
 
 
-def normalize_name(name: str):
-    """Normalize the company name for most accurate match against name database.
-    We want to be able to use the name as a key."""
-    name = re.sub(r'[^a-z0-9]', ' ', name.lower())
-    name = re.sub(r'\b(ltd|inc|co|corp|plc|llc)\b', '', name)
-    name = re.sub(r' +', ' ', name).strip()
-    #name = tuple(sorted(name.split()))
-    return name
-
-
 ASSTYPES = {'Equity', 'FixedIncome', 'ShortTerm'}
 IDCOLUMNS = ['name', 'ticker', 'sedol', 'isin', 'cusip']
-COLUMNS = ['fraction', 'asstype'] + IDCOLUMNS
+COLUMNS = ['etf', 'account', 'fraction', 'asstype'] + IDCOLUMNS
 
 
 def check_holdings(holdings: Table):
@@ -98,12 +90,19 @@ def main():
 
     parser.add_argument('--dbdir', default=database.DEFAULT_DIR,
                         help="Database directory to write all the downloaded files.")
+
+    parser.add_argument('-F', '--full-table', action='store',
+                        help="Path to write the full table to.")
+
+    parser.add_argument('-A', '--agg-table', action='store',
+                        help="Path to write the full table to.")
+
     args = parser.parse_args()
     db = database.Database(args.dbdir)
 
     # Load up the list of assets from the exported Beancount file.
     assets = beansupport.read_exported_assets(args.assets_csv, args.ignore_options)
-    assets.checkall(['ticker', 'issuer', 'price', 'number'])
+    assets.checkall(['ticker', 'account', 'issuer', 'price', 'number'])
 
     assets = assets.order(lambda row: (row.issuer, row.ticker))
 
@@ -116,13 +115,15 @@ def main():
     tickermap = collections.defaultdict(list)
     alltables = []
     for row in assets:
+        #if row.issuer != 'iShares': continue ## FIXME: remove
+
         if row.number < 0 and args.ignore_shorts:
             continue
 
-        amount = row.number * row.price
         if not row.issuer:
-            hrow = (row.ticker, 1.0, row.ticker)
-            tickermap[row.ticker].append((amount, hrow, row.ticker))
+            holdings = Table(['fraction', 'asstype', 'ticker'],
+                             [str, str, str],
+                             [[1.0, 'Equity', row.ticker]])
         else:
             try:
                 downloader = issuers.MODULES[row.issuer]
@@ -144,61 +145,42 @@ def main():
             holdings = downloader.parse(filename)
             check_holdings(holdings)
 
-            # Add parent ETF and fixup columns.
-            holdings = add_missing_columns(holdings)
-            holdings = holdings.select(COLUMNS)
+        # Add parent ETF and fixup columns.
+        holdings = add_missing_columns(holdings)
+        holdings = holdings.create('etf', lambda _: row.ticker)
+        holdings = holdings.create('account', lambda _: row.account)
+        holdings = holdings.select(COLUMNS)
 
-            alltables.append(holdings)
+        # Convert fraction to dollar amount.
+        dollar_amount = row.number * row.price
+        holdings = (holdings
+                    .create('amount', lambda row: row.fraction * dollar_amount)
+                    .delete(['fraction']))
 
-            # for hrow in holdings:
-            #     assert hrow.ticker.strip() == hrow.ticker, hrow.ticker
-            #     tickermap[hrow.ticker].append((amount, hrow, row.ticker))
+        alltables.append(holdings)
 
-    alltable = table.concat(*alltables)
-    #print(alltable)
-    raise SystemExit
+    # Write out the full table.
+    fulltable = table.concat(*alltables)
+    logging.info("Total amount from full holdings table: {:.2f}".format(
+        numpy.sum(fulltable.array('amount'))))
+    if args.full_table:
+        with open(args.full_table, 'w') as outfile:
+            table.write_csv(fulltable, outfile)
 
-    rows = []
-    for ticker, assetlist in sorted(tickermap.items(), key=lambda item: len(item[1])):
-        amount = 0
-        for hamount, hrow, basket_ticker in assetlist:
-            _, fraction, description = hrow
-            pos_amount = fraction * hamount
-            amount += pos_amount
-            if DEBUG_TICKER is not None and ticker == DEBUG_TICKER:
-                print(basket_ticker, hrow, pos_amount)
-        rows.append((ticker, amount, description))
-    tbl = Table(['ticker', 'amount', 'name'], [str, float, str], rows)
+    # Aggregate the holdings.
+    aggtable = graph.group(fulltable)
+    if args.agg_table:
+        with open(args.agg_table, 'w') as outfile:
+            table.write_csv(aggtable, outfile)
 
-    head = tbl.order('amount', asc=False).head(2048)
-    print(head)
-    table.write_csv(head, '/tmp/disag.csv')
-
-    # FIXME: BRKB BRK.B
-    # FIXME: Group SEDOL's together, many are same name.
-    #print(tbl.order('amount', asc=False).head(2048).map('description', str.lower).order('description'))
-
-    # FIXME: Include SEDOL as a column to help matching.
-    # FIXME: Include ISIN as a column to help matching.
-    # FIXME: Rename 'description' to 'name' everywhere.
-
-            # #'BND', 'BNDX', 'VBTIX', 'LQD', 'NYF'
-            # # Fixup missing ticker names.
-            # #
-            # # FIXME: Remove this and move the mapping from americanfunds.com to
-            # # a second loop in here after the collection stage, and do a
-            # # two-step train & classify on all the missing symbols.
-            # #
-            # if 0:
-            #     for v in holdings.values('ticker'):
-            #         if v and not re.match(r'[A-Z0-9.]+$', v):
-            #             print(v, filename)
-            #     #holdings = holdings.update('ticker', lambda row: row.ticker or row.description)
-
-
-DEBUG_TICKER = None # 'AAPL'
-#DEBUG_TICKER = 'AMAZON.COM INC'
-#DEBUG_TICKER = ''
+    # Cull out the tail of holdings for printing.
+    tail = 0.98
+    amount = aggtable.array('amount')
+    total_amount = numpy.sum(amount)
+    logging.info('Total: {:.2f}'.format(total_amount))
+    cum_amount = numpy.cumsum(amount)
+    headsize = len(amount[cum_amount < total_amount * tail])
+    print(aggtable.head(headsize))
 
 
 if __name__ == '__main__':

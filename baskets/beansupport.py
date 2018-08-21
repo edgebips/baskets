@@ -28,9 +28,10 @@ def read_exported_assets(filename: str, ignore_options: bool = False) -> table.T
     if ignore_options:
         tbl = tbl.filter(lambda row: row.assetcls != 'Options')
     tbl = (tbl
-           .select(['currency', 'cost_currency', 'export',
+           .select(['account_abbrev', 'currency', 'cost_currency', 'export',
                     'number', 'issuer',
                     'price_file', 'rate_file'])
+           .rename(('account_abbrev', 'account'))
            .map('price_file', safefloat)
            .map('rate_file', safefloat)
            .map('number', float)
@@ -39,7 +40,7 @@ def read_exported_assets(filename: str, ignore_options: bool = False) -> table.T
            .filter(lambda row: bool(row.ticker))
            .create('price', lambda row: row.price_file * row.rate_file)
            .delete(['price_file', 'rate_file'])
-           .group(('ticker', 'issuer', 'price'), 'number', sum)
-           .order(lambda row: (row.ticker, row.issuer, row.price))
-           .checkall(['ticker', 'issuer', 'price', 'number']))
+           .group(('ticker', 'account', 'issuer', 'price'), 'number', sum)
+           .order(lambda row: (row.ticker, row.issuer, row.account, row.price))
+           .checkall(['ticker', 'account', 'issuer', 'price', 'number']))
     return tbl
