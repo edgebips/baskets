@@ -1,3 +1,8 @@
+"""Support loading from Beancount.
+"""
+__author__ = 'Martin Blais <blais@furius.ca>'
+__license__ = "GNU GPLv2"
+
 from baskets import table
 
 
