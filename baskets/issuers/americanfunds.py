@@ -8,12 +8,7 @@ import csv
 import logging
 import re
 import time
-from typing import Dict
 
-from selenium.common import exceptions
-
-from baskets import collect
-from baskets import driverlib
 from baskets import utils
 from baskets.table import Table
 

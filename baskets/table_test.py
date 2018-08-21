@@ -3,7 +3,6 @@
 __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
-import pytest
 import textwrap
 import io
 from decimal import Decimal as D

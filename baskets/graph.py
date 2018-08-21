@@ -6,7 +6,6 @@ __license__ = "GNU GPLv2"
 import collections
 import logging
 import re
-from typing import List
 
 import networkx as nx
 

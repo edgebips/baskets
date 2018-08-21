@@ -3,11 +3,9 @@
 __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
-import csv
 import logging
 import time
 
-from selenium.common import exceptions
 
 import xlrd
 

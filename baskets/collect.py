@@ -3,44 +3,27 @@
 __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
-from os import path
-from pprint import pprint
-from typing import Dict
 import argparse
 import collections
-import contextlib
-import csv
-import datetime
 import logging
-import os
-import re
-import shutil
-import time
 
 import numpy
-import pandas
-import requests
-from selenium import webdriver
-#from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome import options
 
 from baskets import table
 from baskets.table import Table
 from baskets import beansupport
-from baskets import utils
-from baskets import driverlib
 from baskets import database
 from baskets import issuers
 from baskets import graph
 
 
-def normalize_holdings_table(table: Table) -> Table:
+def normalize_holdings_table(tbl: Table) -> Table:
     """The assets don't actually sum to 100%, normalize them."""
-    total = sum([row.fraction for row in table])
-    if not (0.98 < total < 1.02):
-        logging.error("Total weight seems invalid: {}".format(total))
+    total = sum([row.fraction for row in tbl])
+    if not 0.98 < total < 1.02:
+        logging.error("Total weight seems invalid: %s", total)
     scale = 1. / total
-    return table.map('fraction', lambda f: f*scale)
+    return tbl.map('fraction', lambda f: f*scale)
 
 
 ASSTYPES = {'Equity', 'FixedIncome', 'ShortTerm'}
@@ -112,8 +95,6 @@ def main():
     tickermap = collections.defaultdict(list)
     alltables = []
     for row in assets:
-        #if row.issuer != 'iShares': continue ## FIXME: remove
-
         if row.number < 0 and args.ignore_shorts:
             continue
 

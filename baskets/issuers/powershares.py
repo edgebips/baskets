@@ -5,9 +5,6 @@ __license__ = "GNU GPLv2"
 
 import csv
 import logging
-import time
-
-from selenium.common import exceptions
 
 from baskets import driverlib
 from baskets import utils

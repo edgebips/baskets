@@ -4,7 +4,7 @@ __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
 from os import path
-from typing import NamedTuple, Union, Tuple
+from typing import NamedTuple, Union
 import datetime
 import os
 

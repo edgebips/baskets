@@ -51,14 +51,11 @@ __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
 from keyword import iskeyword
-from typing import NamedTuple, Tuple, List, Set, Any, Dict, Callable, Union
-import argparse
+from typing import NamedTuple, Tuple, List, Any, Callable, Union
 import collections
 import csv
-import datetime
 import io
 import itertools
-import logging
 import re
 import typing
 

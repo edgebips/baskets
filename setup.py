@@ -30,5 +30,6 @@ setup(
         'networkx',
         'numpy',
         'pandas',
+        'pytest',
     ]
 )

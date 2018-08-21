@@ -7,9 +7,6 @@ import logging
 import re
 import csv
 from typing import Dict
-from decimal import Decimal as D
-
-from selenium import webdriver
 
 from baskets import csv_utils
 from baskets import driverlib

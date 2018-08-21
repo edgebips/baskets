@@ -4,28 +4,14 @@ __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
 from os import path
-from pprint import pprint
-from typing import Dict
 import argparse
-import contextlib
-import csv
 import datetime
 import logging
 import os
-import re
 import shutil
-import time
 
-import pandas
-import requests
-from selenium import webdriver
-#from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome import options
-
-from baskets import table
 from baskets.table import Table
 from baskets import beansupport
-from baskets import utils
 from baskets import driverlib
 from baskets import database
 from baskets import issuers
