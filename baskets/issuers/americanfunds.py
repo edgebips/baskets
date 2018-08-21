@@ -14,6 +14,7 @@ from selenium.common import exceptions
 
 from baskets import collect
 from baskets import driverlib
+from baskets import utils
 from baskets.table import Table
 
 
@@ -76,43 +77,26 @@ def download(driver, symbol: str):
     return [filename]
 
 
-HAS_TICKERS = False
-
-
-def parse(filename: str, namemap: Dict[str,str]) -> Table:
+def parse(filename: str) -> Table:
     with open(filename) as infile:
         reader = csv.reader(infile)
         header = next(reader)
         rows = list(reader)
-    tbl = (Table(header, [str] * len(header), rows)
-           .map('security_name', str.strip)
-           .map('market_value', clean_amount))
-    total_value = sum(tbl.values('market_value'))
+    tbl = Table(header, [str] * len(header), rows)
+
+    # Compute fraction.
+    tbl = utils.create_fraction_from_market_value(tbl, 'market_value')
+
+    # Add asset class.
+    cls = {'Equity': 'Equity',
+           'Fixed Income': 'FixedIncome',
+           'Short Term': 'ShortTerm'}
     tbl = (tbl
-           .create('fraction', lambda row: row.market_value/total_value)
-           .create('ticker', lambda row: match_name(namemap, row)))
+           .map('asset_type', cls.__getitem__)
+           .rename(('asset_type', 'asstype')))
 
-    # Calculate how many of the names were matched.
-    matched_fraction = 0
-    for row in tbl:
-        if row.ticker:
-            matched_fraction += row.fraction
-    logging.info("Matched: {:%}".format(matched_fraction))
+    # Set name column.
+    tbl = tbl.rename(('security_name', 'name'))
 
-    return (tbl
-            .rename(('security_name', 'description'))
-            .select(['ticker', 'fraction', 'description']))
-
-
-def match_name(namemap: Dict[str,str], row) -> str:
-    key = collect.normalize_name(row.security_name)
-    tickers = namemap.get(key, None)
-    if tickers and len(tickers) == 1:
-        return next(iter(tickers))
-    return ''
-
-
-def clean_amount(string: str) -> float:
-    """Convert $ amount to a float."""
-    clean_str = string.replace('$', '').replace(',', '')
-    return float(clean_str) if clean_str else D('0')
+    # Cull the final set of produced columns.
+    return tbl.select(['fraction', 'asstype', 'name'])

@@ -10,6 +10,7 @@ import time
 from selenium.common import exceptions
 
 from baskets import driverlib
+from baskets import utils
 from baskets.table import Table
 
 
@@ -38,18 +39,20 @@ def parse(filename: str) -> Table:
         reader = csv.reader(infile)
         header = next(reader)
         rows = list(reader)
-    tbl = (Table(header, [str] * len(header), rows)
-           .rename(('holdingsticker', 'ticker'), ('name', 'description'))
-           .map('marketvalue', clean_amount))
-    total_value = sum(tbl.values('marketvalue'))
+    tbl = Table(header, [str] * len(header), rows)
+
+    # Compute market value.
+    tbl = utils.create_fraction_from_market_value(tbl, 'marketvalue')
+
+    # Create asset type column.
+    tbl = tbl.create('asstype', lambda _: 'Equity')
+
+    # Create identifier columns.
     tbl = (tbl
-           .create('fraction', lambda row: row.marketvalue/total_value)
-           .select(['ticker', 'fraction', 'description'])
-           .map('ticker', str.strip))
-    return tbl
+           .check(['name'])
+           .rename(('holdingsticker', 'ticker'))
+           .map('ticker', str.strip)
+           .rename(('securitynum', 'cusip')))
+    # What about 'securitynum'? What is it?
 
-
-def clean_amount(string: str) -> float:
-    """Convert $ amount to a float."""
-    clean_str = string.replace('$', '').replace(',', '')
-    return float(clean_str) if clean_str else D('0')
+    return tbl.select(['fraction', 'asstype', 'name', 'ticker', 'cusip'])

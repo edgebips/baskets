@@ -13,6 +13,7 @@ from selenium.common import exceptions
 from beancount.utils import csv_utils
 
 from baskets import driverlib
+from baskets import utils
 from baskets.table import Table
 
 
@@ -58,24 +59,23 @@ def download(driver, symbol: str):
 
 def parse(filename: str) -> Table:
     header, outrows = find_table(filename)
-    tbl = (Table(header, [str] * len(header), outrows)
-           .map('market_value', clean_amount))
-    total_value = sum(tbl.values('market_value'))
-    tbl = tbl.create('fraction', lambda row: row.market_value/total_value)
+    tbl = Table(header, [str] * len(header), outrows)
+
+    # Create fraction column.
+    tbl = utils.create_fraction_from_market_value(tbl, 'market_value')
+
+    # Add ticker column.
     if 'Ticker' in header:
-        tbl = tbl.select(['ticker', 'fraction', 'name'])
+        tbl = (tbl
+               .create('asstype', lambda _: 'Equity')
+               .map('ticker', str.strip))
     else:
         tbl = (tbl
-               .update('name', update_name)
-               .create('ticker', lambda _: '')
-               .select(['ticker', 'fraction', 'name']))
+               .create('asstype', lambda _: 'FixedIncome')
+               .create('ticker', lambda _: ''))
     return (tbl
-            .map('ticker', str.strip)
-            .rename(('name', 'description')))
-
-
-def update_name(row):
-    return 'BOND: {}'.format(row.name)
+            .map('sedol', lambda sedol: '' if sedol == '-' else sedol)
+            .select(['fraction', 'asstype', 'name', 'ticker', 'sedol', 'isin']))
 
 
 def find_table(filename: str) -> List[str]:
@@ -94,9 +94,3 @@ def find_table(filename: str) -> List[str]:
                 break
             outrows.append(row)
     return header, outrows
-
-
-def clean_amount(string: str) -> float:
-    """Convert $ amount to a float."""
-    clean_str = string.replace('$', '').replace(',', '')
-    return float(clean_str) if clean_str else D('0')

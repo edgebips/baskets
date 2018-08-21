@@ -14,10 +14,11 @@ from beancount.utils import csv_utils
 
 from selenium import webdriver
 
-from baskets import table
-from baskets.table import Table
 from baskets import driverlib
+from baskets import table
+from baskets import utils
 from baskets.driverlib import retry
+from baskets.table import Table
 
 
 def download(driver, symbol: str):
@@ -42,6 +43,9 @@ def download(driver, symbol: str):
     return driverlib.get_downloads(driver)
 
 
+VALUES_COLUMNS = ['market_value', 'asstype', 'holdings', 'ticker', 'sedol']
+
+
 def parse(filename: str) -> Dict[str, Table]:
     """Load tables from the CSV file."""
     with open(filename) as infile:
@@ -56,21 +60,16 @@ def parse(filename: str) -> Dict[str, Table]:
         'Short-term reserves': parse_shortterm_reserves,
     }
     tables = []
-    values_columns = ['ticker', 'market_value', 'holdings']
     for title, tbl in table_map.items():
         parser = parsers[title]
         subtbl = parser(tbl)
-        subtbl.checkall(values_columns)
+        subtbl.checkall(VALUES_COLUMNS)
         tables.append(subtbl)
 
     values_table = table.concat(*tables)
-    market_value = values_table.values('market_value')
-    total_value = sum(market_value)
-    tbl = (values_table
-           .map('ticker', str.strip)
-           .create('fraction', lambda row: row.market_value/total_value)
-           .rename(('holdings', 'description')))
-    return tbl.select(['ticker', 'fraction', 'description'])
+    return (utils.create_fraction_from_market_value(values_table, 'market_value')
+            .rename(('holdings', 'name'))
+    	    .select(['fraction', 'asstype', 'name', 'ticker', 'sedol']))
 
 
 def pct_to_fraction(string: str) -> float:
@@ -81,44 +80,34 @@ def pct_to_fraction(string: str) -> float:
         return float(string.replace('%', '')) / 100.
 
 
-def clean_amount(string: str) -> float:
-    """Convert $ amount to a float."""
-    clean_str = string.replace('$', '').replace(',', '')
-    return float(clean_str) if clean_str else D('0')
-
-
 def parse_equity(table: Table) -> Table:
     """Parse the Equity table."""
     return (table
-            .map('market_value', clean_amount)
-            .select(['ticker', 'market_value', 'holdings']))
-
-
-def update_name(row):
-    return 'BOND: {}'.format(row.holdings)
+            .create('asstype', lambda _: 'Equity')
+            .map('ticker', str.strip)
+            .select(VALUES_COLUMNS))
 
 
 def parse_fixed_income(table: Table) -> Table:
     """Parse the Fixed income table."""
     return (table
-            .map('market_value', clean_amount)
+            .create('asstype', lambda _: 'FixedIncome')
             .create('ticker', lambda _: '')
-            .update('holdings', update_name)
-            .select(['ticker', 'market_value', 'holdings']))
+            .update('sedol', lambda row: row.sedol if row.sedol != '-' else '')
+            .select(VALUES_COLUMNS))
 
 
 def parse_shortterm_reserves(table: Table) -> Table:
     """Parse the Short-term reserves table."""
     index = None
     for fname in 'face_amount', 'face_amount_local_currency':
-        try:
+        if fname in table.columns:
             index = table.columns.index(fname)
             break
-        except ValueError:
-            pass
     assert index is not None
     return (table
-         .map(fname, clean_amount)
-         .rename((fname, 'market_value'),
-                 ('sedol', 'ticker'))
-         .select(['ticker', 'market_value', 'holdings']))
+            .create('asstype', lambda _: 'ShortTerm')
+            .rename((fname, 'market_value'))
+            .create('ticker', lambda _: '')
+            .update('sedol', lambda row: row.sedol if row.sedol != '-' else '')
+            .select(VALUES_COLUMNS))

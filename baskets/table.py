@@ -106,33 +106,34 @@ class Table(_Table):
         return len(self.rows)
 
     # Column operations.
-    def select(self, *args, **kw):   return select(self, *args, **kw)
-    def create(self, *args, **kw):   return create(self, *args, **kw)
-    def update(self, *args, **kw):   return update(self, *args, **kw)
-    def map(self, *args, **kw):      return map_(self, *args, **kw)
-    def delete(self, *args, **kw):   return delete(self, *args, **kw)
-    def values(self, *args, **kw):   return values(self, *args, **kw)
-    def array(self, *args, **kw):    return array(self, *args, **kw)
-    def coltype(self, *args, **kw):  return coltype(self, *args, **kw)
-    def index(self, *args, **kw):    return index(self, *args, **kw)
-    def rename(self, *args, **kw):   return rename(self, *args, **kw)
+    def select(self, *args, **kw):     return select(self, *args, **kw)
+    def create(self, *args, **kw):     return create(self, *args, **kw)
+    def update(self, *args, **kw):     return update(self, *args, **kw)
+    def map(self, *args, **kw):        return map_(self, *args, **kw)
+    def delete(self, *args, **kw):     return delete(self, *args, **kw)
+    def values(self, *args, **kw):     return values(self, *args, **kw)
+    def itervalues(self, *args, **kw): return itervalues(self, *args, **kw)
+    def array(self, *args, **kw):      return array(self, *args, **kw)
+    def coltype(self, *args, **kw):    return coltype(self, *args, **kw)
+    def index(self, *args, **kw):      return index(self, *args, **kw)
+    def rename(self, *args, **kw):     return rename(self, *args, **kw)
 
     # Row operations.
-    def iterate(self):               return iterate(self)
-    def __iter__(self):              return iterate(self)
-    def filter(self, *args, **kw):   return filter(self, *args, **kw)
-    def group(self, *args, **kw):    return group(self, *args, **kw)
-    def order(self, *args, **kw):    return order(self, *args, **kw)
-    def pivot(self, *args, **kw):    return pivot(self, *args, **kw)
-    def append(self, *args, **kw):   return append(self, *args, **kw)
+    def iterate(self):                 return iterate(self)
+    def __iter__(self):                return iterate(self)
+    def filter(self, *args, **kw):     return filter(self, *args, **kw)
+    def group(self, *args, **kw):      return group(self, *args, **kw)
+    def order(self, *args, **kw):      return order(self, *args, **kw)
+    def pivot(self, *args, **kw):      return pivot(self, *args, **kw)
+    def append(self, *args, **kw):     return append(self, *args, **kw)
 
     # Table operations.
-    def format(self, *args, **kw):   return format(self, *args, **kw)
-    def head(self, *args, **kw):     return head(self, *args, **kw)
-    def concat(self, *args, **kw):   return concat(self, *args, **kw)
-    def join(self, *args, **kw):     return join(self, *args, **kw)
-    def check(self, *args, **kw):    return check(self, *args, **kw)
-    def checkall(self, *args, **kw): return checkall(self, *args, **kw)
+    def format(self, *args, **kw):     return format(self, *args, **kw)
+    def head(self, *args, **kw):       return head(self, *args, **kw)
+    def concat(self, *args, **kw):     return concat(self, *args, **kw)
+    def join(self, *args, **kw):       return join(self, *args, **kw)
+    def check(self, *args, **kw):      return check(self, *args, **kw)
+    def checkall(self, *args, **kw):   return checkall(self, *args, **kw)
 
     # @property
     # def Row(self):
@@ -230,6 +231,12 @@ def values(table: Table, column: str):
     """Get a column's list of values."""
     index = table.columns.index(column)
     return [row[index] for row in table.rows]
+
+
+def itervalues(table: Table, column: str):
+    """Get a column's iterator of values."""
+    index = table.columns.index(column)
+    return (row[index] for row in table.rows)
 
 
 def array(table: Table, column: str):
@@ -349,8 +356,8 @@ def concat(*tables: Tuple[Table]):
     table1 = tables[0]
     rows = list(table1.rows)
     for table2 in tables[1:]:
-        assert table2.columns == table1.columns
-        assert table2.types == table1.types
+        assert table2.columns == table1.columns, (table1.columns, table2.columns)
+        assert table2.types == table1.types, (table1.types, table2.types)
         rows.extend(table2.rows)
     return Table(table1.columns, table1.types, rows)
 

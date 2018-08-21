@@ -54,6 +54,34 @@ def normalize_name(name: str):
     return name
 
 
+ASSTYPES = {'Equity', 'FixedIncome', 'ShortTerm'}
+IDCOLUMNS = ['name', 'ticker', 'sedol', 'isin', 'cusip']
+COLUMNS = ['fraction', 'asstype'] + IDCOLUMNS
+
+
+def check_holdings(holdings: Table):
+    """Check that the holdings Table has the required columns."""
+    actual = set(holdings.columns)
+
+    allowed = {'asstype', 'fraction'} | set(IDCOLUMNS)
+    other = actual - allowed
+    assert not other, "Extra columns found: {}".format(other)
+
+    required = {'asstype', 'fraction'}
+    assert required.issubset(actual), (
+        "Required columns missing: {}".format(required - actual))
+
+    assert set(IDCOLUMNS) & actual, "No ids columns found: {}".format(actual)
+
+    assert all(cls in ASSTYPES for cls in holdings.values('asstype'))
+
+
+def add_missing_columns(tbl: Table) -> Table:
+    for column in IDCOLUMNS:
+        if column not in tbl.columns:
+            tbl = tbl.create(column, lambda _: '')
+    return tbl
+
 
 def main():
     logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
@@ -77,23 +105,16 @@ def main():
     assets = beansupport.read_exported_assets(args.assets_csv, args.ignore_options)
     assets.checkall(['ticker', 'issuer', 'price', 'number'])
 
-    def hastickers(row):
-        module = issuers.MODULES.get(row.issuer)
-        if module:
-            return getattr(module, 'HAS_TICKERS', True)
-        return True
-    assets = (assets
-              .create('hastickers', hastickers)
-              .order(lambda row: (not row.hastickers, row.issuer, row.ticker)))
+    assets = assets.order(lambda row: (row.issuer, row.ticker))
 
-    if 1:
+    if 0:
         print()
         print(assets)
         print()
 
     # Fetch baskets for each of those.
     tickermap = collections.defaultdict(list)
-    namemap = collections.defaultdict(set)
+    alltables = []
     for row in assets:
         if row.number < 0 and args.ignore_shorts:
             continue
@@ -113,34 +134,29 @@ def main():
             if filename is None:
                 logging.error("Missing file for %s", row.ticker)
                 continue
+            logging.info("Parsing file '%s' with '%s'", filename, row.issuer)
 
             if not hasattr(downloader, 'parse'):
                 logging.error("Parser for %s is not implemented", row.ticker)
                 continue
 
-            holdings = (downloader.parse(filename)
-                        if row.hastickers else
-                        downloader.parse(filename, namemap))
+            # Parse the file.
+            holdings = downloader.parse(filename)
+            check_holdings(holdings)
 
-            #'BND', 'BNDX', 'VBTIX', 'LQD', 'NYF'
-            # Fixup missing ticker names.
-            #
-            # FIXME: Remove this and move the mapping from americanfunds.com to
-            # a second loop in here after the collection stage, and do a
-            # two-step train & classify on all the missing symbols.
-            #
-            if 0:
-                for v in holdings.values('ticker'):
-                    if v and not re.match(r'[A-Z0-9.]+$', v):
-                        print(v, filename)
-                #holdings = holdings.update('ticker', lambda row: row.ticker or row.description)
+            # Add parent ETF and fixup columns.
+            holdings = add_missing_columns(holdings)
+            holdings = holdings.select(COLUMNS)
 
-            for hrow in holdings:
-                assert hrow.ticker.strip() == hrow.ticker, hrow.ticker
-                tickermap[hrow.ticker].append((amount, hrow, row.ticker))
-                if hrow.ticker and not re.match(r'SEDOL:', hrow.ticker):
-                    key = normalize_name(hrow.description)
-                    namemap[key].add(hrow.ticker)
+            alltables.append(holdings)
+
+            # for hrow in holdings:
+            #     assert hrow.ticker.strip() == hrow.ticker, hrow.ticker
+            #     tickermap[hrow.ticker].append((amount, hrow, row.ticker))
+
+    alltable = table.concat(*alltables)
+    #print(alltable)
+    raise SystemExit
 
     rows = []
     for ticker, assetlist in sorted(tickermap.items(), key=lambda item: len(item[1])):
@@ -152,7 +168,7 @@ def main():
             if DEBUG_TICKER is not None and ticker == DEBUG_TICKER:
                 print(basket_ticker, hrow, pos_amount)
         rows.append((ticker, amount, description))
-    tbl = Table(['ticker', 'amount', 'description'], [str, float, str], rows)
+    tbl = Table(['ticker', 'amount', 'name'], [str, float, str], rows)
 
     head = tbl.order('amount', asc=False).head(2048)
     print(head)
@@ -165,6 +181,19 @@ def main():
     # FIXME: Include SEDOL as a column to help matching.
     # FIXME: Include ISIN as a column to help matching.
     # FIXME: Rename 'description' to 'name' everywhere.
+
+            # #'BND', 'BNDX', 'VBTIX', 'LQD', 'NYF'
+            # # Fixup missing ticker names.
+            # #
+            # # FIXME: Remove this and move the mapping from americanfunds.com to
+            # # a second loop in here after the collection stage, and do a
+            # # two-step train & classify on all the missing symbols.
+            # #
+            # if 0:
+            #     for v in holdings.values('ticker'):
+            #         if v and not re.match(r'[A-Z0-9.]+$', v):
+            #             print(v, filename)
+            #     #holdings = holdings.update('ticker', lambda row: row.ticker or row.description)
 
 
 DEBUG_TICKER = None # 'AAPL'

@@ -7,5 +7,5 @@ from . import americanfunds
 MODULES = {'Vanguard': vanguard,
            'iShares': ishares,
            'PowerShares': powershares,
-           'StateStreet': spdr,
+           'SPDR': spdr,
            'AmericanFunds': americanfunds}

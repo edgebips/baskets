@@ -39,18 +39,24 @@ def download(driver, symbol: str):
 
 def parse(filename: str) -> Table:
     header, rows = read_table(filename)
-    tbl = (Table(header, [str] * len(header), rows)
-           .rename(('name', 'description'),
-                   ('identifier', 'ticker'),
-                   ('weight', 'fraction'))
-           .map('ticker', str.strip)
-           .map('fraction', float)
-           .select(['ticker', 'fraction', 'description'])
-           )
-    total_value = sum(tbl.values('fraction'))
+    tbl = Table(header, [str] * len(header), rows)
+
+    # Use weight column as fraction directly.
+    tbl = tbl.map('weight', float).rename(('weight', 'fraction'))
+    total_value = sum(tbl.itervalues('fraction'))
     if not (99 <= total_value <= 101):
         logging.error("Total value is invalid: %s", total_value)
-    return tbl.map('fraction', lambda f: f/total_value)
+    tbl = tbl.map('fraction', lambda f: f/total_value)
+
+    # Create asset type column.
+    tbl = tbl.create('asstype', lambda _: 'Equity')
+
+    # Add identifiers.
+    tbl = (tbl
+           .check(['name'])
+           .rename(('identifier', 'ticker')))
+
+    return tbl.select(['fraction', 'asstype', 'name', 'ticker'])
 
 
 def read_table(filename):
