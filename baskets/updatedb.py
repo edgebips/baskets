@@ -16,9 +16,6 @@ import re
 import shutil
 import time
 
-# FIXME: Factor out the Table operations to their own schema; remove Pandas.
-from beancount.utils import csv_utils
-
 import pandas
 import requests
 from selenium import webdriver

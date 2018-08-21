@@ -9,11 +9,9 @@ import csv
 from typing import Dict
 from decimal import Decimal as D
 
-# FIXME: Factor out the Table operations to their own schema; remove Pandas.
-from beancount.utils import csv_utils
-
 from selenium import webdriver
 
+from baskets import csv_utils
 from baskets import driverlib
 from baskets import table
 from baskets import utils

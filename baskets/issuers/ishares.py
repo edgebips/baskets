@@ -10,8 +10,6 @@ from typing import List
 
 from selenium.common import exceptions
 
-from beancount.utils import csv_utils
-
 from baskets import driverlib
 from baskets import utils
 from baskets.table import Table
