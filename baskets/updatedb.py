@@ -24,6 +24,14 @@ def HoldingsTable(rows):
                  rows)
 
 
+def get_driver(driver, args):
+    """Get or create a new driver."""
+    driver = driver or driverlib.create_driver(args.driver_exec,
+                                               headless=args.headless)
+    driverlib.reset(driver)
+    return driver
+
+
 def main():
     """Update the database of holdings for ETFs in the portfolio."""
     logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
@@ -51,35 +59,55 @@ def main():
     # Load up the list of assets from the exported Beancount file.
     assets = beansupport.read_assets(args.assets_csv, args.ignore_options)
 
+    # Update the list of etfs.
+    driver = fetch_holdings('__LIST__', 'Nasdaq', None, args, db)
+    listfilename = database.getlatest(db, '__LIST__')
+    downloader = issuers.get('Nasdaq', False)
+    etflist = downloader.parse(listfilename)
+    etfindex = etflist.index('ticker')
+
     # Fetch baskets for each of those.
-    driver = None
     for row in sorted(assets):
-        downloader = issuers.get(row.issuer, args.ignore_missing_issuer)
+        if not row.issuer:
+            try:
+                issuer = etfindex[row.ticker].issuer
+            except KeyError:
+                raise ValueError("Was not able to infer issuer for {}".format(row.ticker))
+        else:
+            issuer = row.issuer
+        driver = fetch_holdings(row.ticker, issuer, driver, args, db)
 
-        # Check if the file has already been downloaded.
-        csvfile = database.getlatest(db, row.ticker)
-        if csvfile is not None:
-            logging.info("Skipping %s; already downloaded", row.ticker)
-            continue
-
-        # Fetch the file.
-        csvdir = database.getdir(db, row.ticker, datetime.date.today())
-        logging.info("Fetching holdings for %s", row.ticker)
-        driver = driver or driverlib.create_driver(args.driver_exec,
-                                                   headless=args.headless)
-        driverlib.reset(driver)
-
-        filenames = downloader.download(driver, row.ticker)
-        if filenames is None:
-            logging.error("No files found for %s", row.ticker)
-            continue
-        os.makedirs(csvdir, exist_ok=True)
-        for filename in filenames:
-            dst = path.join(csvdir, path.basename(filename))
-            logging.info("Copying %s -> %s", filename, dst)
-            shutil.copyfile(filename, dst)
     if driver:
         driver.close()
+
+
+def fetch_holdings(ticker, issuer, driver, args, db):
+    """Fetch the holdings file."""
+    downloader = issuers.get(issuer, args.ignore_missing_issuer)
+
+    # Check if the file has already been downloaded.
+    csvfile = database.getlatest(db, ticker)
+    if csvfile is not None:
+        logging.info("Skipping %s; already downloaded", ticker)
+        return driver
+
+    # Fetch the file.
+    logging.info("Fetching holdings for %s", ticker)
+    driver = get_driver(driver, args)
+    filenames = downloader.download(driver, ticker)
+    if filenames is None:
+        logging.error("No files found for %s", ticker)
+        return driver
+
+    # Write out the downloaded file to database location.
+    csvdir = database.getdir(db, ticker, datetime.date.today())
+    os.makedirs(csvdir, exist_ok=True)
+    for filename in filenames:
+        dst = path.join(csvdir, path.basename(filename))
+        logging.info("Copying %s -> %s", filename, dst)
+        shutil.copyfile(filename, dst)
+
+    return driver
 
 
 if __name__ == '__main__':

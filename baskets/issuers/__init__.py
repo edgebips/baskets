@@ -10,12 +10,15 @@ from . import ishares
 from . import powershares
 from . import spdr
 from . import americanfunds
+from .meta import nasdaq
 
 MODULES = {'Vanguard': vanguard,
            'iShares': ishares,
            'PowerShares': powershares,
            'SPDR': spdr,
-           'AmericanFunds': americanfunds}
+           'AmericanFunds': americanfunds,
+           # For lists.
+           'Nasdaq': nasdaq}
 
 
 def get(issuer: str, ignore_missing_issuer: bool):

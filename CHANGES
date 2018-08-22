@@ -5,4 +5,5 @@
 
 2018-08-22
 
+  - Added support for downloading a list of ETFs and their issuers (from the Nasdaq directory).
   - Initial release with README.

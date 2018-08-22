@@ -51,7 +51,7 @@ __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
 from keyword import iskeyword
-from typing import NamedTuple, Tuple, List, Any, Callable, Union
+from typing import NamedTuple, Tuple, List, Any, Callable, Union, Dict
 import collections
 import csv
 import io
@@ -166,6 +166,8 @@ def idify(idx: int, name: str):
     name = re.sub('_+', '_', re.sub(r'[^a-zA-Z0-9_]', '_', name)).strip('_')
     if iskeyword(name):
         name = name + '_'
+    if re.match(r'\d', name):
+        name = 'x' + name
     return name.lower()
 
 
@@ -257,9 +259,11 @@ def coltype(*args, **kw):
 
 
 # pylint: disable=unused-argument
-def index(*args, **kw):
+def index(table: Table, column: str) -> Dict:
     """Create a unique mapping from the contents of a column."""
-    raise NotImplementedError
+    idx = table.columns.index(column)
+    return {row[idx]: row
+            for row in table.rows}
 
 
 def rename(table: Table, *namepairs: Tuple[Tuple[str]]) -> Table:
@@ -468,6 +472,7 @@ def read_csv(infile: Union[str, io.TextIOBase]) -> Table:
     finally:
         if close:
             infile.close()
+    header = list(itertools.starmap(idify, enumerate(header)))
     return Table(header, types, rows)
 
 
