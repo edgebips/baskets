@@ -18,6 +18,20 @@ Exchange Trade Funds and quantities, can
 If you invest mostly with ETFs / baskets of stocks, it essentially answers the
 question: "What's my exposure to stock X?"
 
+
+Motivation
+--------------------
+
+You may be surprised that none of the brokers currently offer this service, and
+that automatically scraping the list of holdings from the issuers web pages is
+made difficult on purpose (although always available, as retail investors may
+want this information). However, download formats that would be convenient to
+pull from a computer program in a common format are typically only offered to
+financial institutions, or for an expensive fee (e.g., see services like
+etf.com, etfdb.com, etc.). I preferred to cook my own, since I had to write code
+on top anyway.
+
+
 Usage
 --------------------
 
@@ -39,7 +53,7 @@ following fields:
 - `account`: The account which holds the ETF. This is used for detailed
   reporting whereby we list the presence of a particular stock in various ETFs
   and accounts. You can put any value here, it's a free-form string.
-  
+
 - `issuer`: The financial company which issues the ETF, that is, which allows
   traders to create or redeem it. Examples include iShares_, Vanguard_,
   PowerShares, SPDRs, and `more <http://etfdb.com/issuers/>`_. See the
@@ -100,5 +114,3 @@ WebDriver fail on some pages, for example). Git it here:
 Untar the binary and install it under `/usr/loca/bin/chromedriver`.
 Alternatively, `baskets-updatedb` accepts the `--driver-exec=` option where you
 can provide the location of your WebDriver executable.
-
-
