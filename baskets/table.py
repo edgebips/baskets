@@ -84,6 +84,7 @@ _Table = NamedTuple('_Table', [
 # FIXME: Idea: Should we make a table a subclass of 'list' and provide a factory
 # of types instead?
 
+# pylint: disable=too-many-public-methods
 class Table(_Table):
     """Table representation: a list of column names, a list of column types,
      and list of rows (matching the types)."""
@@ -101,6 +102,8 @@ class Table(_Table):
 
     def __len__(self):
         return len(self.rows)
+
+    # pylint: disable=missing-docstring,bad-whitespace,multiple-statements
 
     # Column operations.
     def select(self, *args, **kw):     return select(self, *args, **kw)
@@ -154,10 +157,10 @@ class Table(_Table):
 #         Table.__new__(self, columns, types, rows)
 
 
-def idify(index: int, name: str):
+def idify(idx: int, name: str):
     """Coerce string into an identifier. For columns."""
     if not name:
-        return 'col{:02d}'.format(index)
+        return 'col{:02d}'.format(idx)
     if '%' in name:
         name = name.replace('%', 'pct')
     name = re.sub('_+', '_', re.sub(r'[^a-zA-Z0-9_]', '_', name)).strip('_')
@@ -196,10 +199,10 @@ def create(table: Table, column: str, newfunc: Callable) -> Table:
 
 def update(table: Table, column: str, mapfunc: Callable) -> Table:
     """Replace the contents of a column via a mapper on a row."""
-    index = table.columns.index(column)
+    idx = table.columns.index(column)
     hints = typing.get_type_hints(mapfunc)
     new_types = list(table.types)
-    new_types[index] = hints.get('return', str)
+    new_types[idx] = hints.get('return', str)
     new_rows = []
     for row in table.rows:
         kw = {column: mapfunc(row)}
@@ -214,26 +217,26 @@ def map_(table: Table, column: str, mapfunc: Callable) -> Table:
 
 def delete(table: Table, columns: List[str]) -> Table:
     """Delete one or more columns."""
-    indexes = [index
-               for index, column in enumerate(table.columns)
+    indexes = [idx
+               for idx, column in enumerate(table.columns)
                if column not in columns]
-    columns = [table.columns[index] for index in indexes]
-    types = [table.types[index] for index in indexes]
+    columns = [table.columns[idx] for idx in indexes]
+    types = [table.types[idx] for idx in indexes]
     return Table(columns, types,
-                 [[row[index] for index in indexes]
+                 [[row[idx] for idx in indexes]
                   for row in table.rows])
 
 
 def values(table: Table, column: str):
     """Get a column's list of values."""
-    index = table.columns.index(column)
-    return [row[index] for row in table.rows]
+    idx = table.columns.index(column)
+    return [row[idx] for row in table.rows]
 
 
 def itervalues(table: Table, column: str):
     """Get a column's iterator of values."""
-    index = table.columns.index(column)
-    return (row[index] for row in table.rows)
+    idx = table.columns.index(column)
+    return (row[idx] for row in table.rows)
 
 
 def array(table: Table, column: str):
@@ -242,13 +245,21 @@ def array(table: Table, column: str):
     if not rows:
         return numpy.empty()
     else:
-        index = table.columns.index(column)
-        return numpy.fromiter((row[index] for row in rows),
-                              type(rows[0][index]), len(rows))
+        idx = table.columns.index(column)
+        return numpy.fromiter((row[idx] for row in rows),
+                              type(rows[0][idx]), len(rows))
 
 
-def coltype(*args, **kw): raise NotImplementedError
-def index(*args, **kw): raise NotImplementedError
+# pylint: disable=unused-argument
+def coltype(*args, **kw):
+    """Return the data type of a particular column."""
+    raise NotImplementedError
+
+
+# pylint: disable=unused-argument
+def index(*args, **kw):
+    """Create a unique mapping from the contents of a column."""
+    raise NotImplementedError
 
 
 def rename(table: Table, *namepairs: Tuple[Tuple[str]]) -> Table:
@@ -257,8 +268,8 @@ def rename(table: Table, *namepairs: Tuple[Tuple[str]]) -> Table:
     for namepair in namepairs:
         assert isinstance(namepair, (tuple, list))
         oldname, newname = namepair
-        index = table.columns.index(oldname)
-        columns[index] = newname
+        idx = table.columns.index(oldname)
+        columns[idx] = newname
     return Table(columns, table.types, table.rows)
 
 
@@ -267,13 +278,14 @@ def iterate(table: Table):
     return iter(table.rows)
 
 
+# pylint: disable=redefined-builtin
 def filter(table: Table, predicate: Callable) -> Table:
     """Filter the rows of a table."""
     rows = [row for row in table.rows if predicate(row)]
     return table.__class__(table.columns, table.types, rows)
 
 
-def _get_group_column(table: Table, key: Union[Callable,str]):
+def _get_group_column(table: Table, key: Union[Callable, str]):
     if isinstance(key, str):
         key = (key,)
     elif isinstance(key, Callable):
@@ -301,8 +313,8 @@ def _get_group_column(table: Table, key: Union[Callable,str]):
 
 
 def group(table: Table,
-          key: Union[Callable,str],
-          value: [Callable,str],
+          key: Union[Callable, str],
+          value: [Callable, str],
           aggfunc: Callable):
     """Group the rows of a table."""
     keynames, keytypes, keyfuncs = _get_group_column(table, key)
@@ -310,34 +322,43 @@ def group(table: Table,
     aggregates = collections.defaultdict(list)
     for row in table.rows:
         key = tuple(func(row) for func in keyfuncs)
-        values = tuple(func(row) for func in valuefuncs)
-        aggregates[key].append(values)
+        vals = tuple(func(row) for func in valuefuncs)
+        aggregates[key].append(vals)
 
     columns = keynames + valuenames
     types = keytypes + valuetypes
     rows = []
-    for key, valuetuples in aggregates.items():
+    for key_, valuetuples in aggregates.items():
         valuelists = list(zip(*valuetuples))
         for valuelist in valuelists:
             value = aggfunc(valuelist)
-            rows.append(key + (value,))
+            rows.append(key_ + (value,))
 
-    return Table(columns, types,  rows)
+    return Table(columns, types, rows)
 
 
-def order(table: Table, key: Union[str,Callable], asc: bool = True) -> Table:
+def order(table: Table, key: Union[str, Callable], asc: bool = True) -> Table:
     """Reorder the rows of a table."""
     if isinstance(key, str):
-        index = table.columns.index(key)
-        key = lambda row, i=index: row[i]
+        idx = table.columns.index(key)
+        key = lambda row, i=idx: row[i]
     return Table(table.columns, table.types,
                  sorted(table.rows, key=key, reverse=(not asc)))
 
 
-def pivot(*args, **kw):    raise NotImplementedError
-def append(*args, **kw):   raise NotImplementedError
+# pylint: disable=unused-argument
+def pivot(*args, **kw):
+    """Aggregate in two dimensions."""
+    raise NotImplementedError
 
 
+# pylint: disable=unused-argument
+def append(*args, **kw):
+    """Append a row to this table."""
+    raise NotImplementedError
+
+
+# pylint: disable=redefined-builtin
 def format(table: Table):
     """Format the table as aligned ASCII."""
     return pandas.DataFrame(table.rows, columns=table.columns).to_string()
@@ -359,7 +380,10 @@ def concat(*tables: Tuple[Table]):
     return Table(table1.columns, table1.types, rows)
 
 
-def join(*args, **kw):     raise NotImplementedError
+# pylint: disable=unused-argument
+def join(*args, **kw):
+    """Left join on two tables."""
+    raise NotImplementedError
 
 
 def check(table: Table, columns: List[str]):
@@ -424,7 +448,7 @@ def checkall(table: Table, columns: List[str]):
 ##    return Table(new_header, new_types, rows)
 
 
-def read_csv(infile: Union[str,io.TextIOBase]) -> Table:
+def read_csv(infile: Union[str, io.TextIOBase]) -> Table:
     """Read from a CSV file."""
     close = False
     if isinstance(infile, str):
@@ -447,7 +471,7 @@ def read_csv(infile: Union[str,io.TextIOBase]) -> Table:
     return Table(header, types, rows)
 
 
-def write_csv(table: Table, outfile: Union[str,io.TextIOBase]):
+def write_csv(table: Table, outfile: Union[str, io.TextIOBase]):
     """Write a table to a CSV file."""
     close = False
     if isinstance(outfile, str):

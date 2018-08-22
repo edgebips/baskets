@@ -26,12 +26,13 @@ def download(driver, symbol: str):
     element.click()
 
     logging.info("Waiting for downloads")
-    driverlib.wait_for_downloads(driver, '.*\.csv$')
+    driverlib.wait_for_downloads(driver, r'.*\.csv$')
 
     return driverlib.get_downloads(driver)
 
 
 def parse(filename: str) -> Table:
+    """Parse the PowerShares holdings file."""
     with open(filename) as infile:
         reader = csv.reader(infile)
         header = next(reader)

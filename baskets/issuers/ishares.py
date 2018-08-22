@@ -50,12 +50,13 @@ def download(driver, symbol: str):
     element.click()
 
     logging.info("Waiting for downloads")
-    driverlib.wait_for_downloads(driver, '.*\.csv$')
+    driverlib.wait_for_downloads(driver, r'.*\.csv$')
 
     return driverlib.get_downloads(driver)
 
 
 def parse(filename: str) -> Table:
+    """Parse the iShares holdings file."""
     header, outrows = find_table(filename)
     tbl = Table(header, [str] * len(header), outrows)
 
@@ -71,15 +72,15 @@ def parse(filename: str) -> Table:
         tbl = (tbl
                .create('asstype', lambda _: 'FixedIncome')
                .create('ticker', lambda _: ''))
-    valid_value = lambda v: '' if v == '-' else v
     return (tbl
-            .map('ticker', valid_value)
-            .map('sedol', valid_value)
-            .map('isin', valid_value)
+            .map('ticker', utils.empty_dashes)
+            .map('sedol', utils.empty_dashes)
+            .map('isin', utils.empty_dashes)
             .select(['fraction', 'asstype', 'name', 'ticker', 'sedol', 'isin']))
 
 
 def find_table(filename: str) -> List[str]:
+    """Find and return the table within an iShares holdings file."""
     with open(filename) as infile:
         reader = csv.reader(infile)
         for row in reader:
@@ -87,7 +88,7 @@ def find_table(filename: str) -> List[str]:
                 break
         else:
             logging.fatal("Could not find start of table")
-            return
+            return None
         header = next(reader)
         outrows = []
         for row in reader:

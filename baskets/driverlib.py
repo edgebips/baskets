@@ -34,7 +34,7 @@ def get_downloads(driver):
             if not re.match(r'.*\.crdownload$', fn)]
 
 
-def wait_for_downloads(driver, pattern: str=None):
+def wait_for_downloads(driver, pattern: str = None):
     """Block until the downloads directory has a single non-temp file."""
     while True:
         filenames = os.listdir(driver.downloads_dir.name)

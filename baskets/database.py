@@ -4,9 +4,9 @@ __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
 from os import path
+import os
 from typing import NamedTuple, Union
 import datetime
-import os
 
 
 DEFAULT_DIR = path.join(os.environ['HOME'], '.baskets/db')
@@ -20,7 +20,7 @@ def getdir(db: Database, key: str, date: datetime.date) -> str:
     return path.join(db.directory, key, '{:%Y/%m/%d}'.format(date))
 
 
-def getlatest(db: Database, key: str) -> Union[str,type(None)]:
+def getlatest(db: Database, key: str) -> Union[str, type(None)]:
     """Return the latest downloaded filename."""
     curdir = path.join(db.directory, key)
     try:
@@ -33,4 +33,5 @@ def getlatest(db: Database, key: str) -> Union[str,type(None)]:
         if filenames:
             return path.join(curdir, sorted(filenames)[-1])
     except FileNotFoundError:
-        return None
+        pass
+    return None

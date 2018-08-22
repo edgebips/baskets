@@ -11,6 +11,7 @@ from baskets import table
 
 
 # FIXME: Write all the tests, this is burgeoning code.
+# pylint: disable=missing-docstring
 
 
 def test_constructor():

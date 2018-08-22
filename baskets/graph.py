@@ -7,7 +7,7 @@ import collections
 import logging
 import re
 import math
-from typing import List, Tuple
+from typing import Tuple
 
 import networkx as nx
 
@@ -27,6 +27,7 @@ def name_key(name: str):
 
 
 def print_group(rows, links, outfile=None):
+    """Print a list of rows."""
     for row in rows:
         print(row, file=outfile)
     for link in links:
@@ -34,9 +35,22 @@ def print_group(rows, links, outfile=None):
     print(file=outfile)
 
 
-def group(holdings: Table, debug_filename: str=None) -> Tuple[Table, Table]:
-    """Group assets by similarity."""
+def print_detailed_debug_info(component, graph):
+    """Print some detailed debug information."""
+    for c in component:
+        # pylint: disable=unidiomatic-typecheck
+        if type(c) is not tuple:
+            print(c)
+            for e in graph.edges(c):
+                print(e[1])
+            print()
+    print()
+    print()
+    print()
 
+
+def build_graph(holdings: Table) -> nx.Graph:
+    """Build a graph of relationships using the identifier columns and name."""
     columns = ['ticker', 'cusip', 'isin', 'sedol']
     g = nx.Graph()
     for row in holdings:
@@ -55,8 +69,14 @@ def group(holdings: Table, debug_filename: str=None) -> Tuple[Table, Table]:
             key = name_key(row.name)
             if key:
                 g.add_edge(row, ('name_key', (row.asstype, key)))
+    return g
+
+
+def group(holdings: Table, debug_filename: str = None) -> Tuple[Table, Table]:
+    """Group assets by similarity."""
 
     # Compute the connected components.
+    g = build_graph(holdings)
     cc = nx.connected_components(g)
     logging.info('Num connected components: %s', nx.number_connected_components(g))
 
@@ -69,6 +89,7 @@ def group(holdings: Table, debug_filename: str=None) -> Tuple[Table, Table]:
         rows = []
         links = []
         for c in component:
+            # pylint: disable=unidiomatic-typecheck
             (links if type(c) is tuple else rows).append(c)
         counts[len(rows)] += 1
         groups.append(rows)
@@ -77,19 +98,22 @@ def group(holdings: Table, debug_filename: str=None) -> Tuple[Table, Table]:
         if debugfile:
             print_group(rows, links, debugfile)
 
-        if 0:
-            # Print groups with mixed asset types.
-            if len(set(row.asstype for row in rows)) > 1:
-                print_group(rows, links)
+        # if ('ticker', 'GOOG') in links or ('ticker', 'GOOGL') in links:
+        #     print_detailed_debug_info(c, g)
 
-        if 0:
-            # Print groups without any ticker.
-            if len(rows) != 1:
-                continue
-            linkdict = dict(links)
-            if linkdict.get('ticker', None):
-                continue
-            print_group(rows, links)
+        # if 0:
+        #     # Print groups with mixed asset types.
+        #     if len(set(row.asstype for row in rows)) > 1:
+        #         print_group(rows, links)
+
+        # if 0:
+        #     # Print groups without any ticker.
+        #     if len(rows) != 1:
+        #         continue
+        #     linkdict = dict(links)
+        #     if linkdict.get('ticker', None):
+        #         continue
+        #     print_group(rows, links)
 
     if debugfile is not None:
         debugfile.close()

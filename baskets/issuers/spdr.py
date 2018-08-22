@@ -16,7 +16,10 @@ from baskets.table import Table
 def download(driver, symbol: str):
     """Get the list of holdings for Vanguard."""
 
-    url = 'https://us.spdrs.com/en/etf/spdr-sp-500-etf-SPY'
+    urlmap = {
+        'SPY': 'https://us.spdrs.com/en/etf/spdr-sp-500-etf-SPY'
+    }
+    url = urlmap[symbol]
     logging.info("Opening %s", url)
     driver.get(url)
 
@@ -30,19 +33,20 @@ def download(driver, symbol: str):
     element.click()
 
     logging.info("Waiting for downloads")
-    driverlib.wait_for_downloads(driver, '.*\.xls$')
+    driverlib.wait_for_downloads(driver, r'.*\.xls$')
 
     return driverlib.get_downloads(driver)
 
 
 def parse(filename: str) -> Table:
+    """Parse the SPDRs holdings file."""
     header, rows = read_table(filename)
     tbl = Table(header, [str] * len(header), rows)
 
     # Use weight column as fraction directly.
     tbl = tbl.map('weight', float).rename(('weight', 'fraction'))
     total_value = sum(tbl.itervalues('fraction'))
-    if not (99 <= total_value <= 101):
+    if not 99 <= total_value <= 101:
         logging.error("Total value is invalid: %s", total_value)
     tbl = tbl.map('fraction', lambda f: f/total_value)
 
@@ -58,6 +62,7 @@ def parse(filename: str) -> Table:
 
 
 def read_table(filename):
+    """Read the XLS file from SPDRs as a Table."""
     wb = xlrd.open_workbook(filename)
     sheet = wb.sheet_by_index(0)
 

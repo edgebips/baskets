@@ -1,6 +1,5 @@
 [REPORTS]
 msg-template="{path}:{line}: [{msg_id}({symbol}), {obj}] {msg}"
 
-# [MESSAGES CONTROL]
-# disable=all
-# 1enable=unused-import
+[MESSAGES CONTROL]
+disable=fixme,too-many-locals,invalid-name,too-many-statements,no-else-return,ungrouped-imports,duplicate-code

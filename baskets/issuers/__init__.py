@@ -1,3 +1,8 @@
+"""Implementation of downloaders and parsers for issuers.
+"""
+__author__ = 'Martin Blais <blais@furius.ca>'
+__license__ = "GNU GPLv2"
+
 import logging
 
 from . import vanguard

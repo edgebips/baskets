@@ -25,6 +25,12 @@ def convert_dollar_amount(string: str) -> float:
 
 
 def create_fraction_from_market_value(tbl: Table, column: str) -> Table:
+    """Create a 'fraction' column computed from the market value column."""
     tbl = tbl.map(column, convert_dollar_amount)
     total_value = sum(tbl.itervalues(column))
     return tbl.create('fraction', lambda row: getattr(row, column)/total_value)
+
+
+def empty_dashes(value: str):
+    """Convert single dash strings to empty strings."""
+    return '' if value == '-' else value

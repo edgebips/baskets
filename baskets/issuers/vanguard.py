@@ -33,7 +33,7 @@ def download(driver, symbol: str):
     element.click()
 
     logging.info("Waiting for downloads")
-    driverlib.wait_for_downloads(driver, '.*\.csv$')
+    driverlib.wait_for_downloads(driver, r'.*\.csv$')
 
     return driverlib.get_downloads(driver)
 
@@ -62,10 +62,11 @@ def parse(filename: str) -> Dict[str, Table]:
         tables.append(subtbl)
 
     values_table = table.concat(*tables)
+    # pylint: disable=bad-continuation
     return (utils.create_fraction_from_market_value(values_table, 'market_value')
             .map('ticker', lambda ticker: ticker if ticker != '-' else '')
             .rename(('holdings', 'name'))
-            .map('sedol', lambda sedol: '' if sedol == '-' else sedol)
+            .map('sedol', utils.empty_dashes)
     	    .select(['fraction', 'asstype', 'name', 'ticker', 'sedol']))
 
 
@@ -77,32 +78,32 @@ def pct_to_fraction(string: str) -> float:
         return float(string.replace('%', '')) / 100.
 
 
-def parse_equity(table: Table) -> Table:
+def parse_equity(tbl: Table) -> Table:
     """Parse the Equity table."""
-    return (table
+    return (tbl
             .create('asstype', lambda _: 'Equity')
             .map('ticker', str.strip)
             .select(VALUES_COLUMNS))
 
 
-def parse_fixed_income(table: Table) -> Table:
+def parse_fixed_income(tbl: Table) -> Table:
     """Parse the Fixed income table."""
-    return (table
+    return (tbl
             .create('asstype', lambda _: 'FixedIncome')
             .create('ticker', lambda _: '')
             .update('sedol', lambda row: row.sedol if row.sedol != '-' else '')
             .select(VALUES_COLUMNS))
 
 
-def parse_shortterm_reserves(table: Table) -> Table:
+def parse_shortterm_reserves(tbl: Table) -> Table:
     """Parse the Short-term reserves table."""
     index = None
     for fname in 'face_amount', 'face_amount_local_currency':
-        if fname in table.columns:
-            index = table.columns.index(fname)
+        if fname in tbl.columns:
+            index = tbl.columns.index(fname)
             break
     assert index is not None
-    return (table
+    return (tbl
             .create('asstype', lambda _: 'ShortTerm')
             .rename((fname, 'market_value'))
             .create('ticker', lambda _: '')

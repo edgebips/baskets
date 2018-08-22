@@ -14,7 +14,9 @@ from baskets.table import Table
 
 
 def gettext(element):
+    """Get the vanilla text of an element."""
     return element.text.replace('\n', ' ')
+
 
 def download(driver, symbol: str):
     """Get the list of holdings for Vanguard."""
@@ -40,7 +42,7 @@ def download(driver, symbol: str):
                 break
         else:
             logging.error("Could not find paging info locator.")
-            return
+            return None
 
         logging.info("Reading page: %s - %s of %s", row_start, row_end, row_last)
         tbl = driver.find_element_by_id('com-mod-fund-holding-results-table')
@@ -73,6 +75,8 @@ def download(driver, symbol: str):
 
 
 def parse(filename: str) -> Table:
+    """Parse the American Funds download."""
+
     with open(filename) as infile:
         reader = csv.reader(infile)
         header = next(reader)

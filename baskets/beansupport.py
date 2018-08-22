@@ -16,6 +16,9 @@ def AssetsTable(rows):
 
 
 def get_ticker(row) -> str:
+    """Get the ticker corresponding to the value in 'export' column.
+    This involves removing the exchange, if present.
+    """
     if not row.export:
         return row.currency if row.currency != row.cost_currency else ''
     else:
@@ -25,11 +28,12 @@ def get_ticker(row) -> str:
         return symbol
 
 
-def safefloat(v: str):
-    return float(v) if v else 1.
+def safefloat(v: str, default: float = 1):
+    """Create a float from the column if not empty."""
+    return float(v) if v else default
 
 
-def read_assets(filename: str, ignore_options: bool = False):
+def read_assets(filename: str, unused_ignore_options: bool = False):
     """Dispatch the reader function between regular and Beancount."""
     match = re.match(r'beancount:(.*)', filename)
     return (read_exported_assets(match.group(1))

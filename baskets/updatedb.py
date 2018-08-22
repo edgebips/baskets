@@ -3,11 +3,11 @@
 __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
+import os
 from os import path
 import argparse
 import datetime
 import logging
-import os
 import shutil
 
 from baskets.table import Table
@@ -25,6 +25,7 @@ def HoldingsTable(rows):
 
 
 def main():
+    """Update the database of holdings for ETFs in the portfolio."""
     logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
     parser = argparse.ArgumentParser(description=__doc__.strip())
 

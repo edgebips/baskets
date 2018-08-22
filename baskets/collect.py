@@ -4,13 +4,12 @@ __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
 import argparse
-import collections
 import logging
 
 import numpy
 
-from baskets import table
 from baskets.table import Table
+from baskets import table
 from baskets import beansupport
 from baskets import database
 from baskets import issuers
@@ -56,6 +55,7 @@ def check_holdings(holdings: Table):
 
 
 def add_missing_columns(tbl: Table) -> Table:
+    """Add empty identifier columns to the table."""
     for column in IDCOLUMNS:
         if column not in tbl.columns:
             tbl = tbl.create(column, lambda _: '')
@@ -63,6 +63,7 @@ def add_missing_columns(tbl: Table) -> Table:
 
 
 def main():
+    """Collect all the assets and holdings and disaggregate."""
     logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
     parser = argparse.ArgumentParser(description=__doc__.strip())
 
@@ -96,10 +97,6 @@ def main():
     assets.checkall(['ticker', 'account', 'issuer', 'price', 'quantity'])
 
     assets = assets.order(lambda row: (row.issuer, row.ticker))
-    if 0:
-        print()
-        print(assets)
-        print()
 
     # Fetch baskets for each of those.
     alltables = []
@@ -130,14 +127,14 @@ def main():
 
         # Add parent ETF and fixup columns.
         holdings = add_missing_columns(holdings)
-        holdings = holdings.create('etf', lambda _: row.ticker)
-        holdings = holdings.create('account', lambda _: row.account)
+        holdings = holdings.create('etf', lambda _, row=row: row.ticker)
+        holdings = holdings.create('account', lambda _, row=row: row.account)
         holdings = holdings.select(COLUMNS)
 
         # Convert fraction to dollar amount.
         dollar_amount = row.quantity * row.price
         holdings = (holdings
-                    .create('amount', lambda row: row.fraction * dollar_amount)
+                    .create('amount', lambda row, a=dollar_amount: row.fraction * a)
                     .delete(['fraction']))
 
         alltables.append(holdings)
