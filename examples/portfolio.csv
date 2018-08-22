@@ -1,0 +1,5 @@
+ticker,account,issuer,price,quantity
+VFINX,Vanguard:401k,Vanguard,104.32,648.2332
+VHT,Schwab,Vanguard,169.87,230
+VNQ,Schwab,Vanguard,82.17,400
+VTI,Schwab,Vanguard,145.78,1235

@@ -31,9 +31,14 @@ def main():
     parser.add_argument('assets_csv',
                         help=('A CSV file which contains the tickers of assets and '
                               'number of units'))
-
     parser.add_argument('--dbdir', default=database.DEFAULT_DIR,
                         help="Database directory to write all the downloaded files.")
+    parser.add_argument('-i', '--ignore-missing-issuer', action='store_true',
+                        help="Ignore positions where the issuer implementation is missing")
+    parser.add_argument('-o', '--ignore-options', action='store_true',
+                        help=("Ignore options positions "
+                              "(only works with  Beancount export file)"))
+
     parser.add_argument('--headless', action='store_true',
                         help="Run without poppping up the browser window.")
     parser.add_argument('-b', '--driver-exec', action='store',
@@ -43,16 +48,12 @@ def main():
     db = database.Database(args.dbdir)
 
     # Load up the list of assets from the exported Beancount file.
-    assets = beansupport.read_exported_assets(args.assets_csv)
+    assets = beansupport.read_assets(args.assets_csv, args.ignore_options)
 
     # Fetch baskets for each of those.
     driver = None
     for row in sorted(assets):
-        try:
-            downloader = issuers.MODULES[row.issuer]
-        except KeyError:
-            logging.error("Missing issuer: %s; Skipping %s", row.issuer, row.ticker)
-            continue
+        downloader = issuers.get(row.issuer, args.ignore_missing_issuer)
 
         # Check if the file has already been downloaded.
         csvfile = database.getlatest(db, row.ticker)

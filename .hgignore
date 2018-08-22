@@ -1,1 +1,2 @@
-.cache/v/cache/lastfailed
+.cache/.*
+.pytest_cache/.*

@@ -62,14 +62,15 @@ def main():
     parser.add_argument('assets_csv',
                         help=('A CSV file which contains the tickers of assets and '
                               'number of units'))
-
-    parser.add_argument('-l', '--ignore-shorts', action='store_true',
-                        help="Ignore short positions")
-    parser.add_argument('-o', '--ignore-options', action='store_true',
-                        help="Ignore options positions")
-
     parser.add_argument('--dbdir', default=database.DEFAULT_DIR,
                         help="Database directory to write all the downloaded files.")
+    parser.add_argument('-i', '--ignore-missing-issuer', action='store_true',
+                        help="Ignore positions where the issuer implementation is missing")
+    parser.add_argument('-o', '--ignore-options', action='store_true',
+                        help=("Ignore options positions "
+                              "(only works with  Beancount export file)"))
+    parser.add_argument('-l', '--ignore-shorts', action='store_true',
+                        help="Ignore short positions")
 
     parser.add_argument('-F', '--full-table', action='store',
                         help="Path to write the full table to.")
@@ -84,11 +85,10 @@ def main():
     db = database.Database(args.dbdir)
 
     # Load up the list of assets from the exported Beancount file.
-    assets = beansupport.read_exported_assets(args.assets_csv, args.ignore_options)
-    assets.checkall(['ticker', 'account', 'issuer', 'price', 'number'])
+    assets = beansupport.read_assets(args.assets_csv, args.ignore_options)
+    assets.checkall(['ticker', 'account', 'issuer', 'price', 'quantity'])
 
     assets = assets.order(lambda row: (row.issuer, row.ticker))
-
     if 0:
         print()
         print(assets)
@@ -98,7 +98,7 @@ def main():
     tickermap = collections.defaultdict(list)
     alltables = []
     for row in assets:
-        if row.number < 0 and args.ignore_shorts:
+        if row.quantity < 0 and args.ignore_shorts:
             continue
 
         if not row.issuer:
@@ -106,11 +106,7 @@ def main():
                              [str, str, str],
                              [[1.0, 'Equity', row.ticker]])
         else:
-            try:
-                downloader = issuers.MODULES[row.issuer]
-            except KeyError:
-                logging.error("Missing issuer %s", row.issuer)
-                continue
+            downloader = issuers.get(row.issuer, args.ignore_missing_issuer)
 
             filename = database.getlatest(db, row.ticker)
             if filename is None:
@@ -133,7 +129,7 @@ def main():
         holdings = holdings.select(COLUMNS)
 
         # Convert fraction to dollar amount.
-        dollar_amount = row.number * row.price
+        dollar_amount = row.quantity * row.price
         holdings = (holdings
                     .create('amount', lambda row: row.fraction * dollar_amount)
                     .delete(['fraction']))

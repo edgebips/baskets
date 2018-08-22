@@ -3,6 +3,8 @@
 __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
+import re
+
 from baskets import table
 
 
@@ -27,6 +29,24 @@ def safefloat(v: str):
     return float(v) if v else 1.
 
 
+def read_assets(filename: str, ignore_options: bool = False):
+    """Dispatch the reader function between regular and Beancount."""
+    match = re.match(r'beancount:(.*)', filename)
+    return (read_exported_assets(match.group(1))
+            if match
+            else read_regular_assets(filename))
+
+
+def read_regular_assets(filename: str):
+    """Read the public file format for assets."""
+    with open(filename) as infile:
+        assets = table.read_csv(infile)
+    assets.checkall(['ticker', 'account', 'issuer', 'price', 'quantity'])
+    return (assets
+            .map('price', float)
+            .map('quantity', float))
+
+
 def read_exported_assets(filename: str, ignore_options: bool = False) -> table.Table:
     """Load a file in beancount.projects.export format."""
     tbl = table.read_csv(filename)
@@ -40,12 +60,13 @@ def read_exported_assets(filename: str, ignore_options: bool = False) -> table.T
            .map('price_file', safefloat)
            .map('rate_file', safefloat)
            .map('number', float)
+           .rename(('number', 'quantity'))
            .create('ticker', get_ticker)
            .delete(['export', 'currency'])
            .filter(lambda row: bool(row.ticker))
            .create('price', lambda row: row.price_file * row.rate_file)
            .delete(['price_file', 'rate_file'])
-           .group(('ticker', 'account', 'issuer', 'price'), 'number', sum)
+           .group(('ticker', 'account', 'issuer', 'price'), 'quantity', sum)
            .order(lambda row: (row.ticker, row.issuer, row.account, row.price))
-           .checkall(['ticker', 'account', 'issuer', 'price', 'number']))
+           .checkall(['ticker', 'account', 'issuer', 'price', 'quantity']))
     return tbl

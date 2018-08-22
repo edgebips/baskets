@@ -10,6 +10,8 @@ from decimal import Decimal as D
 from baskets import table
 
 
+# FIXME: Write all the tests, this is burgeoning code.
+
 
 def test_constructor():
     t = table.Table(['units', 'currency'],
@@ -26,10 +28,11 @@ def test_constructor():
 
 
 def test_idify():
-    assert table.idify('foo') == 'foo'
-    assert table.idify('foo a') == 'foo_a'
-    assert table.idify('  foo  bar ') == 'foo_bar'
-    assert table.idify('foo123a') == 'foo123a'
+    assert table.idify(0, 'foo') == 'foo'
+    assert table.idify(1, 'foo a') == 'foo_a'
+    assert table.idify(2, '  foo  bar ') == 'foo_bar'
+    assert table.idify(3, 'foo123a') == 'foo123a'
+    assert table.idify(4, '') == 'col04'
 
 
 def test_select():

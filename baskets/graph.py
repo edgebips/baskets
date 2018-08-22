@@ -62,7 +62,7 @@ def group(holdings: Table, debug_filename: str=None) -> Tuple[Table, Table]:
 
     # Process each component.
     counts = collections.defaultdict(int)
-    debugfile = open(debug_filename, 'w') if debug_filename else Non
+    debugfile = open(debug_filename, 'w') if debug_filename else None
     groups = []
     for component in cc:
         # Separate out the rows and links.
