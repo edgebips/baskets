@@ -65,6 +65,7 @@ def parse(filename: str) -> Dict[str, Table]:
     return (utils.create_fraction_from_market_value(values_table, 'market_value')
             .map('ticker', lambda ticker: ticker if ticker != '-' else '')
             .rename(('holdings', 'name'))
+            .map('sedol', lambda sedol: '' if sedol == '-' else sedol)
     	    .select(['fraction', 'asstype', 'name', 'ticker', 'sedol']))
 
 

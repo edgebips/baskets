@@ -71,8 +71,11 @@ def parse(filename: str) -> Table:
         tbl = (tbl
                .create('asstype', lambda _: 'FixedIncome')
                .create('ticker', lambda _: ''))
+    valid_value = lambda v: '' if v == '-' else v
     return (tbl
-            .map('sedol', lambda sedol: '' if sedol == '-' else sedol)
+            .map('ticker', valid_value)
+            .map('sedol', valid_value)
+            .map('isin', valid_value)
             .select(['fraction', 'asstype', 'name', 'ticker', 'sedol', 'isin']))
 
 

@@ -44,8 +44,15 @@ def check_holdings(holdings: Table):
         "Required columns missing: {}".format(required - actual))
 
     assert set(IDCOLUMNS) & actual, "No ids columns found: {}".format(actual)
-
     assert all(cls in ASSTYPES for cls in holdings.values('asstype'))
+
+    # Check that '-' don't appear in identifier columns.
+    for column in IDCOLUMNS:
+        if column not in holdings.columns:
+            continue
+        values = holdings.values(column)
+        if '-' in values:
+            raise ValueError("Invalid value '-' in column '{}'".format(column))
 
 
 def add_missing_columns(tbl: Table) -> Table:
@@ -95,7 +102,6 @@ def main():
         print()
 
     # Fetch baskets for each of those.
-    tickermap = collections.defaultdict(list)
     alltables = []
     for row in assets:
         if row.quantity < 0 and args.ignore_shorts:
