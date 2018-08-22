@@ -6,7 +6,8 @@ __license__ = "GNU GPLv2"
 import collections
 import logging
 import re
-from typing import List
+import math
+from typing import List, Tuple
 
 import networkx as nx
 
@@ -18,7 +19,7 @@ def name_key(name: str):
     We want to be able to use the name as a key."""
     name = name.lower()
     name = re.sub(r'\d{1,2}/\d{1,2}/\d{1,4}', 'replaced_expiration_date', name)
-    name = re.sub(r'\b(ltd|inc|co|corp|plc|llc|sa|adr|non-voting|preferred|class [A-F])\b', '', name)
+    name = re.sub(r'\b(ltd|inc|co|corp|plc|llc|sa|adr|non-voting|preferred)\b', '', name)
     name = re.sub(r'[^a-z0-9]', ' ', name)
     name = re.sub(r' +', ' ', name).strip()
     #name = tuple(sorted(name.split()))
@@ -33,7 +34,7 @@ def print_group(rows, links, outfile=None):
     print(file=outfile)
 
 
-def group(holdings: Table) -> Table:
+def group(holdings: Table, debug_filename: str=None) -> Tuple[Table, Table]:
     """Group assets by similarity."""
 
     columns = ['ticker', 'cusip', 'isin', 'sedol']
@@ -57,11 +58,11 @@ def group(holdings: Table) -> Table:
 
     # Compute the connected components.
     cc = nx.connected_components(g)
-    logging.info('Num connedted components: %s', nx.number_connected_components(g))
+    logging.info('Num connected components: %s', nx.number_connected_components(g))
 
     # Process each component.
     counts = collections.defaultdict(int)
-    allfile = None # open('/tmp/allgroups.txt', 'w')
+    debugfile = open(debug_filename, 'w') if debug_filename else Non
     groups = []
     for component in cc:
         # Separate out the rows and links.
@@ -73,8 +74,8 @@ def group(holdings: Table) -> Table:
         groups.append(rows)
 
         # Print all groups to a test file.
-        if allfile:
-            print_group(rows, links, allfile)
+        if debugfile:
+            print_group(rows, links, debugfile)
 
         if 0:
             # Print groups with mixed asset types.
@@ -90,20 +91,23 @@ def group(holdings: Table) -> Table:
                 continue
             print_group(rows, links)
 
-    if allfile is not None:
-        allfile.close()
+    if debugfile is not None:
+        debugfile.close()
     logging.info('Matched: {:%}'.format(1 - counts[1] / sum(counts.values())))
-    logging.info('Items distribution: %s', sorted(counts.items()))
+    logging.info('Items distribution (log-floored):')
+    # Convert to log map.
+    logcounts = collections.defaultdict(int)
+    for numitems, count in sorted(counts.items()):
+        lognumitems = int(math.pow(2, int(math.log2(numitems))))
+        logcounts[lognumitems] += count
+    for numitems, count in sorted(logcounts.items()):
+        logging.info('   {:>3}~{:>3} items: {:10}'.format(numitems-1, numitems, count))
 
-    # Reduce the rows
+    # Reduce the rows and produce an aggregated table.
     aggrows = []
-    for rows in groups:
+    sorted_groups = sorted(groups, key=lambda grows: -sum(row.amount for row in grows))
+    for rows in sorted_groups:
         assert rows
-        if 0:
-            for row in rows:
-                print(row)
-            print()
-
         amount = sum(row.amount for row in rows)
         name = rows[0].name
         symbol = ','.join(sorted(set(row.ticker for row in rows if row.ticker)))
@@ -112,4 +116,14 @@ def group(holdings: Table) -> Table:
     columns = ['symbol', 'asstype', 'name', 'amount']
     aggtable = (Table(columns, [str, str, str, float], aggrows)
                 .order(lambda row: row.amount, asc=False))
-    return aggtable
+
+    # Reproduce the original table, but with the row groups annotated this time.
+    annotation_map = {}
+    for index, rows in enumerate(sorted_groups):
+        for row in rows:
+            annotation_map[row] = index
+    annotable = (holdings.create('group', annotation_map.__getitem__)
+                 .order(lambda row: (row.group, -row.amount)))
+    assert len(holdings) == len(annotable)
+
+    return aggtable, annotable

@@ -97,6 +97,9 @@ def main():
     parser.add_argument('-A', '--agg-table', action='store',
                         help="Path to write the full table to.")
 
+    parser.add_argument('-D', '--debug-output', action='store',
+                        help="Path to debugging output of grouping algorithm.")
+
     args = parser.parse_args()
     db = database.Database(args.dbdir)
 
@@ -158,23 +161,25 @@ def main():
                     .delete(['fraction']))
 
         alltables.append(holdings)
-
-    # Write out the full table.
     fulltable = table.concat(*alltables)
-    logging.info("Total amount from full holdings table: {:.2f}".format(
-        numpy.sum(fulltable.array('amount'))))
-    if args.full_table:
-        with open(args.full_table, 'w') as outfile:
-            table.write_csv(fulltable, outfile)
 
     # Aggregate the holdings.
-    aggtable = graph.group(fulltable)
+    aggtable, annotable = graph.group(fulltable, args.debug_output)
     if args.agg_table:
         with open(args.agg_table, 'w') as outfile:
             table.write_csv(aggtable, outfile)
 
+    # Write out the full table.
+    logging.info("Total amount from full holdings table: {:.2f}".format(
+        numpy.sum(fulltable.array('amount'))))
+    logging.info("Total amount from full holdings table: {:.2f}".format(
+        numpy.sum(annotable.array('amount'))))
+    if args.full_table:
+        with open(args.full_table, 'w') as outfile:
+            table.write_csv(annotable, outfile)
+
     # Cull out the tail of holdings for printing.
-    tail = 0.98
+    tail = 0.90
     amount = aggtable.array('amount')
     total_amount = numpy.sum(amount)
     logging.info('Total: {:.2f}'.format(total_amount))
