@@ -71,6 +71,9 @@ import numpy
 
 # FIXME: Implement automatic type inference.
 
+# FIXME: Deal with an empty table properly (e.g. unit tests, because rows[0] is
+# accessed in the code below).
+
 Header = List[str]
 Types = List[type]
 Rows = List[List[Any]]
