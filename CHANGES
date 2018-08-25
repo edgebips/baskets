@@ -3,6 +3,16 @@
 ==============================
 
 
+2018-08-25
+
+  - Removed error-prone automatic inference of issuer from ticker. We'll
+    implement a per-issuer list fetcher instead.
+
+  - Renamed baskets-collect to baskets-portfolio in view of upcoming new features.
+
+  - Some internal cleanup.
+
+
 2018-08-22
 
   - Added support for downloading a list of ETFs and their issuers (from the Nasdaq directory).

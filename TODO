@@ -4,3 +4,21 @@
 - Multithread gathering
 - Build reverse index: given a stock which positions does it come from
 - Define STD format for list of positions
+
+
+- Answer this question: Which of the available ETFs is the least correlated to mine?
+
+- Given two portfolios, compute correlation of asset exposures between them (requires matching instruments).
+
+- Build an instrument matcher database, using CC of the full set of available
+  instruments across all ETFs. This should be used internally as a service to
+  match and sanitize and normalize all reported holdings.
+
+- Build a script to collect and print out a normalized form of the holdings.
+  That in itself can be usful.
+
+- Build a service to provide:
+  * Download normalized holdings
+  * Compute correlation in overlap between two ETFs or a portfolio and an ETF.
+  * Disaggregate portfolio feature
+  Basically all that the tools provide, but via a simple web interface.

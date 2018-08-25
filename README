@@ -36,7 +36,7 @@ Usage
 --------------------
 
 Two Python scripts are provided for the two aforementioned tasks:
-`basksets-updatedb` and `baskets-collect`.
+`basksets-updatedb` and `baskets-portfolio`.
 
 
 Input Format

@@ -133,7 +133,9 @@ def group(holdings: Table, debug_filename: str = None) -> Tuple[Table, Table]:
     for rows in sorted_groups:
         assert rows
         amount = sum(row.amount for row in rows)
-        name = rows[0].name
+        # Select the longest name. It seems to nealy always be the best variant.
+        names = sorted(set(row.name for row in rows), key=len, reverse=True)
+        name = names[0]
         symbol = ','.join(sorted(set(row.ticker for row in rows if row.ticker)))
         asstype = ','.join(sorted(set(row.asstype for row in rows)))
         aggrows.append((symbol, asstype, name, amount))

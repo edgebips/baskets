@@ -33,15 +33,15 @@ def safefloat(v: str, default: float = 1):
     return float(v) if v else default
 
 
-def read_assets(filename: str, unused_ignore_options: bool = False):
+def read_portfolio(filename: str, unused_ignore_options: bool = False):
     """Dispatch the reader function between regular and Beancount."""
     match = re.match(r'beancount:(.*)', filename)
-    return (read_exported_assets(match.group(1))
+    return (read_exported_portfolio(match.group(1))
             if match
-            else read_regular_assets(filename))
+            else read_regular_portfolio(filename))
 
 
-def read_regular_assets(filename: str):
+def read_regular_portfolio(filename: str):
     """Read the public file format for assets."""
     with open(filename) as infile:
         assets = table.read_csv(infile)
@@ -51,7 +51,7 @@ def read_regular_assets(filename: str):
             .map('quantity', float))
 
 
-def read_exported_assets(filename: str, ignore_options: bool = False) -> table.Table:
+def read_exported_portfolio(filename: str, ignore_options: bool = False) -> table.Table:
     """Load a file in beancount.projects.export format."""
     tbl = table.read_csv(filename)
     if ignore_options:

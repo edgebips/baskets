@@ -21,16 +21,7 @@ MODULES = {'Vanguard': vanguard,
            'Nasdaq': nasdaq}
 
 
-def get(issuer: str, ignore_missing_issuer: bool):
+def get(issuer: str):
     """Get an issuer implementation.
     This function optionally exits the program on failure."""
-    try:
-        return MODULES[issuer]
-    except KeyError:
-        message = "Missing issuer: {}".format(issuer)
-        if ignore_missing_issuer:
-            logging.error("%s; Skipping", message)
-            return None
-        else:
-            logging.fatal("%s; Exiting", message)
-            raise SystemExit(message)
+    return MODULES.get(issuer)

@@ -5,7 +5,7 @@ __license__ = "GNU GPLv2"
 
 from os import path
 import os
-from typing import NamedTuple, Union
+from typing import NamedTuple, Union, Optional
 import datetime
 
 
@@ -16,8 +16,16 @@ Database = NamedTuple('Database', [('directory', str)])
 
 
 def getdir(db: Database, key: str, date: datetime.date) -> str:
-    """Get or create directory."""
+    """Get a dated directory."""
     return path.join(db.directory, key, '{:%Y/%m/%d}'.format(date))
+
+
+def get(db: Database, key: str, date: datetime.date) -> Optional[str]:
+    """Get the directory for a particular date or return None."""
+    dirname = getdir(db, key, date)
+    if path.exists(dirname):
+        filenames = os.listdir(dirname)
+        return path.join(dirname, sorted(filenames)[-1]) if filenames else None
 
 
 def getlatest(db: Database, key: str) -> Union[str, type(None)]:

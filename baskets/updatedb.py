@@ -27,7 +27,7 @@ def HoldingsTable(rows):
 def get_driver(driver, args):
     """Get or create a new driver."""
     driver = driver or driverlib.create_driver(args.driver_exec,
-                                               headless=args.headless)
+                                               headless=not args.visible)
     driverlib.reset(driver)
     return driver
 
@@ -37,7 +37,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
     parser = argparse.ArgumentParser(description=__doc__.strip())
 
-    parser.add_argument('assets_csv',
+    parser.add_argument('portfolio',
                         help=('A CSV file which contains the tickers of assets and '
                               'number of units'))
     parser.add_argument('--dbdir', default=database.DEFAULT_DIR,
@@ -48,8 +48,8 @@ def main():
                         help=("Ignore options positions "
                               "(only works with  Beancount export file)"))
 
-    parser.add_argument('--headless', action='store_true',
-                        help="Run without poppping up the browser window.")
+    parser.add_argument('--visible', action='store_true',
+                        help="Run with a visible browser window (not headless).")
     parser.add_argument('-b', '--driver-exec', action='store',
                         default="/usr/local/bin/chromedriver",
                         help="Path to chromedriver executable.")
@@ -57,25 +57,15 @@ def main():
     db = database.Database(args.dbdir)
 
     # Load up the list of assets from the exported Beancount file.
-    assets = beansupport.read_assets(args.assets_csv, args.ignore_options)
-
-    # Update the list of etfs.
-    driver = fetch_holdings('__LIST__', 'Nasdaq', None, args, db)
-    listfilename = database.getlatest(db, '__LIST__')
-    downloader = issuers.get('Nasdaq', False)
-    etflist = downloader.parse(listfilename)
-    etfindex = etflist.index('ticker')
+    assets = beansupport.read_portfolio(args.portfolio, args.ignore_options)
 
     # Fetch baskets for each of those.
+    driver = None
     for row in sorted(assets):
-        if not row.issuer:
-            try:
-                issuer = etfindex[row.ticker].issuer
-            except KeyError:
-                raise ValueError("Was not able to infer issuer for {}".format(row.ticker))
-        else:
-            issuer = row.issuer
-        driver = fetch_holdings(row.ticker, issuer, driver, args, db)
+        if not row.issuer and args.ignore_missing_issuer:
+            logging.warning("Ignoring missing issuer for {}".format(row.ticker))
+            continue
+        driver = fetch_holdings(row.ticker, row.issuer, driver, args, db)
 
     if driver:
         driver.close()
@@ -83,10 +73,18 @@ def main():
 
 def fetch_holdings(ticker, issuer, driver, args, db):
     """Fetch the holdings file."""
-    downloader = issuers.get(issuer, args.ignore_missing_issuer)
+    downloader = issuers.get(issuer)
+    if downloader is None:
+        message = "Missing issuer: {}".format(issuer)
+        if args.ignore_missing_issuer:
+            logging.error(message)
+            return
+        else:
+            raise SystemExit(message)
 
     # Check if the file has already been downloaded.
-    csvfile = database.getlatest(db, ticker)
+    today = datetime.date.today()
+    csvfile = database.get(db, ticker, today)
     if csvfile is not None:
         logging.info("Skipping %s; already downloaded", ticker)
         return driver
@@ -100,7 +98,7 @@ def fetch_holdings(ticker, issuer, driver, args, db):
         return driver
 
     # Write out the downloaded file to database location.
-    csvdir = database.getdir(db, ticker, datetime.date.today())
+    csvdir = database.getdir(db, ticker, today)
     os.makedirs(csvdir, exist_ok=True)
     for filename in filenames:
         dst = path.join(csvdir, path.basename(filename))

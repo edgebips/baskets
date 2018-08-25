@@ -67,7 +67,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
     parser = argparse.ArgumentParser(description=__doc__.strip())
 
-    parser.add_argument('assets_csv',
+    parser.add_argument('portfolio',
                         help=('A CSV file which contains the tickers of assets and '
                               'number of units'))
     parser.add_argument('--dbdir', default=database.DEFAULT_DIR,
@@ -79,6 +79,9 @@ def main():
                               "(only works with  Beancount export file)"))
     parser.add_argument('-l', '--ignore-shorts', action='store_true',
                         help="Ignore short positions")
+
+    parser.add_argument('-t', '--threshold', action='store', type=float, default=0,
+                        help="Remove holdings whose value is under a threshold")
 
     parser.add_argument('-F', '--full-table', action='store',
                         help="Path to write the full table to.")
@@ -93,7 +96,7 @@ def main():
     db = database.Database(args.dbdir)
 
     # Load up the list of assets from the exported Beancount file.
-    assets = beansupport.read_assets(args.assets_csv, args.ignore_options)
+    assets = beansupport.read_portfolio(args.portfolio, args.ignore_options)
     assets.checkall(['ticker', 'account', 'issuer', 'price', 'quantity'])
 
     assets = assets.order(lambda row: (row.issuer, row.ticker))
@@ -109,7 +112,14 @@ def main():
                              [str, str, str],
                              [[1.0, 'Equity', row.ticker]])
         else:
-            downloader = issuers.get(row.issuer, args.ignore_missing_issuer)
+            downloader = issuers.get(row.issuer)
+            if downloader is None:
+                message = "Missing issuer: {}".format(issuer)
+                if args.ignore_missing_issuer:
+                    logging.error(message)
+                    continue
+                else:
+                    raise SystemExit(message)
 
             filename = database.getlatest(db, row.ticker)
             if filename is None:
@@ -145,6 +155,13 @@ def main():
     if args.agg_table:
         with open(args.agg_table, 'w') as outfile:
             table.write_csv(aggtable, outfile)
+
+    # Remove the holdings whose aggregate is under a threshold.
+    # Note: This could be imporoved by removing aggregates whose value is under
+    # a threshold.
+    if args.threshold:
+        fulltable = fulltable.filter(
+            lambda row: aggtable.rows[row.group].amount > args.threshold)
 
     # Write out the full table.
     logging.info("Total amount from full holdings table: {:.2f}".format(
