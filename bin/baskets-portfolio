@@ -2,5 +2,5 @@
 __copyright__ = "Copyright (C) 2018  Martin Blais"
 __license__ = "GNU GPLv2"
 import sys
-from baskets.collect import main
+from baskets.portfolio import main
 sys.exit(main())
