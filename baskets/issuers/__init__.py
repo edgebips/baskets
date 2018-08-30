@@ -5,20 +5,23 @@ __license__ = "GNU GPLv2"
 
 import logging
 
-from . import vanguard
+from . import americanfunds
+from . import globalx
 from . import ishares
 from . import powershares
 from . import spdr
-from . import americanfunds
+from . import vanguard
 from .meta import nasdaq
 
-MODULES = {'Vanguard': vanguard,
-           'iShares': ishares,
-           'PowerShares': powershares,
-           'SPDR': spdr,
-           'AmericanFunds': americanfunds,
-           # For lists.
-           'Nasdaq': nasdaq}
+MODULES = {
+    'AmericanFunds': americanfunds,
+    'GlobalX': globalx,
+    'Nasdaq': nasdaq,
+    'PowerShares': powershares,
+    'SPDR': spdr,
+    'Vanguard': vanguard,
+    'iShares': ishares,
+}
 
 
 def get(issuer: str):
