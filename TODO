@@ -22,3 +22,8 @@
   * Compute correlation in overlap between two ETFs or a portfolio and an ETF.
   * Disaggregate portfolio feature
   Basically all that the tools provide, but via a simple web interface.
+
+
+- baskets-updatedb shouldn't have to accept a portfolio as input; it should be
+  able to update everything that it has already seen in its database. However,
+  the other option should remain available.

@@ -156,21 +156,19 @@ def main():
         with open(args.agg_table, 'w') as outfile:
             table.write_csv(aggtable, outfile)
 
-    # Remove the holdings whose aggregate is under a threshold.
-    # Note: This could be imporoved by removing aggregates whose value is under
-    # a threshold.
+    # Remove the holdings whose aggregate sum is under a threshold.
     if args.threshold:
-        fulltable = fulltable.filter(
+        filt_annotable = annotable.filter(
             lambda row: aggtable.rows[row.group].amount > args.threshold)
 
     # Write out the full table.
     logging.info("Total amount from full holdings table: {:.2f}".format(
         numpy.sum(fulltable.array('amount'))))
-    logging.info("Total amount from full holdings table: {:.2f}".format(
-        numpy.sum(annotable.array('amount'))))
+    logging.info("Total amount from annotated holdings table: {:.2f}".format(
+        numpy.sum(filt_annotable.array('amount'))))
     if args.full_table:
         with open(args.full_table, 'w') as outfile:
-            table.write_csv(annotable, outfile)
+            table.write_csv(filt_annotable, outfile)
 
     # Cull out the tail of holdings for printing.
     tail = 0.90

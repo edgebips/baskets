@@ -96,7 +96,7 @@ class Table(_Table):
         clean_columns = list(itertools.starmap(idify, enumerate(columns)))
         Row = collections.namedtuple('Row', clean_columns)
         assert len(columns) == len(types)
-        if not isinstance(rows[0], Row):
+        if rows and not isinstance(rows[0], Row):
             rows = list(map(Row._make, rows))
         return _Table.__new__(cls, clean_columns, types, rows, Row)
 

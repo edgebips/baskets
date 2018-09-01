@@ -24,6 +24,9 @@ def HoldingsTable(rows):
                  rows)
 
 
+# FIXME: Remove this function and put this state as part of an object in
+# driverlib. Merge with downloads_dir attribute. The 'real' driver needs a
+# proxy. Call it something appropriate and different than 'driver'.
 def get_driver(driver, args):
     """Get or create a new driver."""
     driver = driver or driverlib.create_driver(args.driver_exec,
@@ -65,18 +68,18 @@ def main():
         if not row.issuer and args.ignore_missing_issuer:
             logging.warning("Ignoring missing issuer for {}".format(row.ticker))
             continue
-        driver = fetch_holdings(row.ticker, row.issuer, driver, args, db)
-
+        driver, _ = fetch_holdings(row.ticker, row.issuer, driver, db,
+                                   args.ignore_missing_issuer, args)
     if driver:
         driver.close()
 
 
-def fetch_holdings(ticker, issuer, driver, args, db):
+def fetch_holdings(ticker, issuer, driver, db, ignore_missing_issuer, args):
     """Fetch the holdings file."""
     downloader = issuers.get(issuer)
     if downloader is None:
         message = "Missing issuer: {}".format(issuer)
-        if args.ignore_missing_issuer:
+        if ignore_missing_issuer:
             logging.error(message)
             return
         else:
@@ -87,7 +90,7 @@ def fetch_holdings(ticker, issuer, driver, args, db):
     csvfile = database.get(db, ticker, today)
     if csvfile is not None:
         logging.info("Skipping %s; already downloaded", ticker)
-        return driver
+        return driver, [csvfile]
 
     # Fetch the file.
     logging.info("Fetching holdings for %s", ticker)
@@ -95,7 +98,7 @@ def fetch_holdings(ticker, issuer, driver, args, db):
     filenames = downloader.download(driver, ticker)
     if filenames is None:
         logging.error("No files found for %s", ticker)
-        return driver
+        return driver, filenames
 
     # Write out the downloaded file to database location.
     csvdir = database.getdir(db, ticker, today)
@@ -105,7 +108,7 @@ def fetch_holdings(ticker, issuer, driver, args, db):
         logging.info("Copying %s -> %s", filename, dst)
         shutil.copyfile(filename, dst)
 
-    return driver
+    return driver, filenames
 
 
 if __name__ == '__main__':
