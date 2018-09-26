@@ -27,18 +27,20 @@ def normalize_holdings_table(tbl: Table) -> Table:
 
 ASSTYPES = {'Equity', 'FixedIncome', 'ShortTerm'}
 IDCOLUMNS = ['name', 'ticker', 'sedol', 'isin', 'cusip']
-COLUMNS = ['etf', 'account', 'fraction', 'asstype'] + IDCOLUMNS
+COLUMNS = ['etf', 'account', 'fraction', 'asstype', 'sector'] + IDCOLUMNS
 
 
 def check_holdings(holdings: Table):
     """Check that the holdings Table has the required columns."""
-    actual = set(holdings.columns)
 
-    allowed = {'asstype', 'fraction'} | set(IDCOLUMNS)
+    # Check for allowed columns.
+    actual = set(holdings.columns)
+    allowed = {'asstype', 'fraction', 'sector'} | set(IDCOLUMNS)
     other = actual - allowed
     assert not other, "Extra columns found: {}".format(other)
 
-    required = {'asstype', 'fraction'}
+    # Check for required columns.
+    required = {'asstype', 'fraction', 'sector'}
     assert required.issubset(actual), (
         "Required columns missing: {}".format(required - actual))
 
@@ -60,6 +62,61 @@ def add_missing_columns(tbl: Table) -> Table:
         if column not in tbl.columns:
             tbl = tbl.create(column, lambda _: '')
     return tbl
+
+
+def fetch_and_parse_all_holdings(db, assets, ignore_shorts, ignore_missing_issuer):
+    """Fetch all the holdings from the web or the databases."""
+    alltables = []
+    fncache = {}
+    for row in assets:
+        if row.quantity < 0 and ignore_shorts:
+            continue
+
+        if not row.issuer:
+            holdings = Table(['fraction', 'asstype', 'sector', 'ticker'],
+                             [str, str, str,  str],
+                             [[1.0, 'Equity', '', row.ticker]])
+        else:
+            downloader = issuers.get(row.issuer)
+            if downloader is None:
+                message = "Missing issuer: {}".format(issuer)
+                if ignore_missing_issuer:
+                    logging.error(message)
+                    continue
+                else:
+                    raise SystemExit(message)
+
+            filename = database.getlatest(db, row.ticker)
+            if filename is None:
+                logging.error("Missing file for %s", row.ticker)
+                continue
+
+            if not hasattr(downloader, 'parse'):
+                logging.error("Parser for %s is not implemented", row.ticker)
+                continue
+
+            # Parse the file.
+            try:
+                holdings = fncache[filename]
+            except KeyError:
+                logging.info("Parsing file '%s' with '%s'", filename, row.issuer)
+                holdings = fncache[filename] = downloader.parse(filename)
+                check_holdings(holdings)
+
+        # Add parent ETF and fixup columns.
+        holdings = add_missing_columns(holdings)
+        holdings = holdings.create('etf', lambda _, row=row: row.ticker)
+        holdings = holdings.create('account', lambda _, row=row: row.account)
+        holdings = holdings.select(COLUMNS)
+
+        # Convert fraction to dollar amount.
+        dollar_amount = row.quantity * row.price
+        holdings = (holdings
+                    .create('amount', lambda row, a=dollar_amount: row.fraction * a)
+                    .delete(['fraction']))
+
+        alltables.append(holdings)
+    return table.concat(*alltables)
 
 
 def main():
@@ -102,53 +159,9 @@ def main():
     assets = assets.order(lambda row: (row.issuer, row.ticker))
 
     # Fetch baskets for each of those.
-    alltables = []
-    for row in assets:
-        if row.quantity < 0 and args.ignore_shorts:
-            continue
-
-        if not row.issuer:
-            holdings = Table(['fraction', 'asstype', 'ticker'],
-                             [str, str, str],
-                             [[1.0, 'Equity', row.ticker]])
-        else:
-            downloader = issuers.get(row.issuer)
-            if downloader is None:
-                message = "Missing issuer: {}".format(issuer)
-                if args.ignore_missing_issuer:
-                    logging.error(message)
-                    continue
-                else:
-                    raise SystemExit(message)
-
-            filename = database.getlatest(db, row.ticker)
-            if filename is None:
-                logging.error("Missing file for %s", row.ticker)
-                continue
-            logging.info("Parsing file '%s' with '%s'", filename, row.issuer)
-
-            if not hasattr(downloader, 'parse'):
-                logging.error("Parser for %s is not implemented", row.ticker)
-                continue
-
-            # Parse the file.
-            holdings = downloader.parse(filename)
-            check_holdings(holdings)
-
-        # Add parent ETF and fixup columns.
-        holdings = add_missing_columns(holdings)
-        holdings = holdings.create('etf', lambda _, row=row: row.ticker)
-        holdings = holdings.create('account', lambda _, row=row: row.account)
-        holdings = holdings.select(COLUMNS)
-
-        # Convert fraction to dollar amount.
-        dollar_amount = row.quantity * row.price
-        holdings = (holdings
-                    .create('amount', lambda row, a=dollar_amount: row.fraction * a)
-                    .delete(['fraction']))
-
-        alltables.append(holdings)
-    fulltable = table.concat(*alltables)
+    fulltable = fetch_and_parse_all_holdings(db, assets,
+                                             args.ignore_shorts,
+                                             args.ignore_missing_issuer)
 
     # Aggregate the holdings.
     aggtable, annotable = graph.group(fulltable, args.debug_output)
@@ -160,6 +173,8 @@ def main():
     if args.threshold:
         filt_annotable = annotable.filter(
             lambda row: aggtable.rows[row.group].amount > args.threshold)
+    else:
+        filt_annotable = annotable
 
     # Write out the full table.
     logging.info("Total amount from full holdings table: {:.2f}".format(
@@ -177,7 +192,9 @@ def main():
     logging.info('Total: {:.2f}'.format(total_amount))
     cum_amount = numpy.cumsum(amount)
     headsize = len(amount[cum_amount < total_amount * tail])
-    print(aggtable.head(headsize))
+    #print(aggtable.head(headsize))
+
+    #graph.group_sectors(fulltable)
 
 
 if __name__ == '__main__':

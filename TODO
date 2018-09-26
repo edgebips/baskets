@@ -1,10 +1,24 @@
-- Add sectors and currencies
-- Compute additional diversification measure
-- Download spreadsheet of strategies allocation (to csv) and evaluate and compare via join
-- Multithread gathering
-- Build reverse index: given a stock which positions does it come from
-- Define STD format for list of positions
+- Improvements on tables:
 
+  * Virtual tables
+  * Remove types
+  * Remove Row, replace with accessor by attribute on regular tuple
+  * See if you can make it work for beancount
+  * Write full tests
+
+- Add sectors and currencies
+
+- Add groups of stocks, in order to aggregate exposure to BigTech strategy
+
+- Compute additional diversification measure
+
+- Download spreadsheet of strategies allocation (to csv) and evaluate and compare via join
+
+- Multithread gathering
+
+- Build reverse index: given a stock which positions does it come from
+
+- Define STD format for list of positions
 
 - Answer this question: Which of the available ETFs is the least correlated to mine?
 
@@ -22,7 +36,6 @@
   * Compute correlation in overlap between two ETFs or a portfolio and an ETF.
   * Disaggregate portfolio feature
   Basically all that the tools provide, but via a simple web interface.
-
 
 - baskets-updatedb shouldn't have to accept a portfolio as input; it should be
   able to update everything that it has already seen in its database. However,

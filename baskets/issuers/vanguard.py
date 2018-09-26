@@ -62,12 +62,14 @@ def parse(filename: str) -> Dict[str, Table]:
         tables.append(subtbl)
 
     values_table = table.concat(*tables)
+
     # pylint: disable=bad-continuation
     return (utils.create_fraction_from_market_value(values_table, 'market_value')
             .map('ticker', lambda ticker: ticker if ticker != '-' else '')
             .rename(('holdings', 'name'))
             .map('sedol', utils.empty_dashes)
-    	    .select(['fraction', 'asstype', 'name', 'ticker', 'sedol']))
+            .create('sector', lambda _: '')
+    	    .select(['fraction', 'asstype', 'name', 'ticker', 'sedol', 'sector']))
 
 
 def pct_to_fraction(string: str) -> float:

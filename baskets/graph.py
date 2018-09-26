@@ -153,3 +153,84 @@ def group(holdings: Table, debug_filename: str = None) -> Tuple[Table, Table]:
     assert len(holdings) == len(annotable)
 
     return aggtable, annotable
+
+
+def group_sectors(holdings: Table) -> Tuple[Table]:
+    """Group assets by sectors."""
+
+
+    # Fix up some of the sector names manually.
+    fholdings = holdings.map('sector', fix_sectors)
+    # sectors = (fholdings
+    #            .group('sector', 'amount', sum)
+    #            .map('amount', lambda a: '{:,.0f}'.format(a)))
+    # print(sectors)
+
+    # # Compute the list of unique sectors.
+    # sectors = collections.defaultdict(int)
+    # for sector in fulltable.values('sector'):
+    #     sectors[sector] += 1
+    # from pprint import pprint
+    # pprint(sectors)
+
+    g = build_graph(fholdings)
+
+    sectors = set()
+    for row in fholdings:
+        if not row.sector:
+            continue
+        sector = ('sector', row.sector)
+        g.add_edge(row, sector)
+        sectors.add(sector)
+
+    cc = list(nx.connected_components(g))
+    print("Num components: {}".format(len(cc)))
+
+    sectors = []
+    unknown_amount = 0
+    unknown_rows = []
+    for component in cc:
+        csectors = set()
+        amount = 0
+        rows = []
+        for c in component:
+            if type(c) is tuple:
+                if c[0] == 'sector':
+                    csectors.add(c[1])
+            else:
+                amount += c.amount
+                rows.append(c)
+        if csectors:
+            sectors.append((','.join(csectors), rows, amount))
+        else:
+            unknown_amount += amount
+            unknown_rows.extend(rows)
+    sectors.append(('', unknown_rows, unknown_amount))
+
+    for sector, rows, amount in sorted(sectors):
+        print('* {:32} : {:12,.0f}'.format(sector, amount))
+        fields = rows[0]._fields
+        tbl = Table(fields, [str] * len(fields), rows)
+        print(tbl)
+        print()
+
+
+
+
+
+def fix_sectors(sector):
+    return _SECTOR_MAP.get(sector, sector)
+
+_SECTOR_MAP = {
+    'Banking': 'Financials',
+    'Finance Companies': 'Financials',
+    'Financial Other': 'Financials',
+    'Brokerage/Asset Managers/Exchanges': 'Financials',
+    'Health': 'Health Care',
+    'Utility Other': 'Utilities',
+    'Utility': 'Utilities',
+    'Telecommunication Services': 'Telecommunications',
+    'Reits': 'Real Estate',
+    'Basic Industry': 'Industrials',
+    'Owned No Guarantee': 'Energy',
+}

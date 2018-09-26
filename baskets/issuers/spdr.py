@@ -16,10 +16,7 @@ from baskets.table import Table
 def download(driver, symbol: str):
     """Get the list of holdings for Vanguard."""
 
-    urlmap = {
-        'SPY': 'https://us.spdrs.com/en/etf/spdr-sp-500-etf-SPY'
-    }
-    url = urlmap[symbol]
+    url = 'https://us.spdrs.com/product/fund.seam?ticker={}'.format(symbol)
     logging.info("Opening %s", url)
     driver.get(url)
 

@@ -94,8 +94,11 @@ def parse(filename: str) -> Table:
            .map('asset_type', cls.__getitem__)
            .rename(('asset_type', 'asstype')))
 
+    # Add sector.
+    tbl = tbl.create('sector', lambda _: '')
+
     # Set name column.
     tbl = tbl.rename(('security_name', 'name'))
 
     # Cull the final set of produced columns.
-    return tbl.select(['fraction', 'asstype', 'name'])
+    return tbl.select(['fraction', 'asstype', 'name', 'sector'])

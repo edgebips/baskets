@@ -76,7 +76,7 @@ def parse(filename: str) -> Table:
             .map('ticker', utils.empty_dashes)
             .map('sedol', utils.empty_dashes)
             .map('isin', utils.empty_dashes)
-            .select(['fraction', 'asstype', 'name', 'ticker', 'sedol', 'isin']))
+            .select(['fraction', 'asstype', 'name', 'ticker', 'sedol', 'isin', 'sector']))
 
 
 def find_table(filename: str) -> List[str]:

@@ -44,5 +44,8 @@ def parse(filename: str) -> Table:
     # I think it's all equity for that issuer AFAIK.
     tbl = tbl.create('asstype', lambda _: 'Equity')
 
+    # Add sector.
+    tbl = tbl.create('sector', lambda _: '')
+
     # Select what we got (not much).
-    return tbl.select(['name', 'asstype', 'fraction'])
+    return tbl.select(['name', 'asstype', 'fraction', 'sector'])

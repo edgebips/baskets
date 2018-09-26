@@ -53,4 +53,4 @@ def parse(filename: str) -> Table:
            .rename(('securitynum', 'cusip')))
     # What about 'securitynum'? What is it?
 
-    return tbl.select(['fraction', 'asstype', 'name', 'ticker', 'cusip'])
+    return tbl.select(['fraction', 'asstype', 'name', 'ticker', 'cusip', 'sector'])
