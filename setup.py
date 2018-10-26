@@ -5,6 +5,7 @@ __copyright__ = "Copyright (C) 2018  Martin Blais"
 __license__ = "GNU GPLv2"
 
 import sys
+from setuptools import setup
 
 if sys.version_info[:2] < (3,):
     raise SystemExit("ERROR: Insufficient Python version; you need v3 or higher.")
