@@ -17,8 +17,8 @@ setup(
     license="GNU GPLv2 only",
     author="Martin Blais",
     author_email="blais@furius.ca",
-    url="http://bitbucket.org/blais/ameritrade",
-    download_url="http://bitbucket.org/blais/ameritrade",
+    url="http://github.com/blais/ameritrade",
+    download_url="http://github.com/blais/ameritrade",
 
     packages = ['ameritrade'],
 
