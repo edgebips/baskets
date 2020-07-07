@@ -36,7 +36,7 @@ def parse(filename: str) -> table.Table:
         for regexp, issuer in [('Vanguard', 'Vanguard'),
                                ('iShares', 'iShares'),
                                ('PowerShares', 'PowerShares'),
-                               ('SPDR', 'SPDR')]:
+                               ('StateStreet', 'StateStreet')]:
             if re.search(regexp, row.name):
                 outrows.append((row.symbol, issuer, row.name))
                 break

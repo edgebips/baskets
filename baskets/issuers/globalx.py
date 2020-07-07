@@ -31,7 +31,7 @@ def download(driver, symbol: str):
 
 
 def parse(filename: str) -> Table:
-    """Parse the SPDRs holdings file."""
+    """Parse the holdings file."""
 
     with open(filename) as infile:
         next(infile)  # Title row

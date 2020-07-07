@@ -9,7 +9,7 @@ from . import americanfunds
 from . import globalx
 from . import ishares
 from . import powershares
-from . import spdr
+from . import statestreet
 from . import vanguard
 from .meta import nasdaq
 
@@ -18,7 +18,7 @@ MODULES = {
     'GlobalX': globalx,
     'Nasdaq': nasdaq,
     'PowerShares': powershares,
-    'SPDR': spdr,
+    'StateStreet': statestreet,
     'Vanguard': vanguard,
     'iShares': ishares,
 }
