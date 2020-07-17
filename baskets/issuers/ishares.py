@@ -23,21 +23,23 @@ def download(driver, symbol: str):
     driver.get(findurl)
 
     logging.info("Narrowing search %s", findurl)
-    element = driver.find_element_by_id('searchInPage')
+    #element = driver.find_element_by_class_name("search-box")
+    element = driver.find_element_by_css_selector('input.search-box')
     element.send_keys(symbol)
     time.sleep(2)
 
     logging.info("Clicking on instrument page")
-    try:
-        element = driver.find_element_by_link_text(symbol)
-        element.click()
-    except exceptions.WebDriverException:
-        logging.info("Click away the annoying survey popup")
-        element = driver.find_element_by_link_text("No")
-        element.click()
-        # Try again.
-        element = driver.find_element_by_link_text(symbol)
-        element.click()
+    element = driver.find_element_by_css_selector('a.tb_fundNames')
+    element.click()
+
+    # try:
+    # except exceptions.WebDriverException:
+    #     logging.info("Click away the annoying survey popup")
+    #     element = driver.find_element_by_link_text("No")
+    #     element.click()
+    #     # Try again.
+    #     element = driver.find_element_by_link_text(symbol)
+    #     element.click()
 
     time.sleep(2)
     logging.info("Clicking on portfolio")

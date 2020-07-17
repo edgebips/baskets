@@ -9,6 +9,7 @@ import argparse
 import datetime
 import logging
 import shutil
+import traceback
 
 from baskets.table import Table
 from baskets import beansupport
@@ -68,8 +69,12 @@ def main():
         if not row.issuer and args.ignore_missing_issuer:
             logging.warning("Ignoring missing issuer for {}".format(row.ticker))
             continue
-        driver, _ = fetch_holdings(row.ticker, row.issuer, driver, db,
-                                   args.ignore_missing_issuer, args)
+        try:
+            driver, _ = fetch_holdings(row.ticker, row.issuer, driver, db,
+                                       args.ignore_missing_issuer, args)
+        except Exception:
+            traceback.print_exc()
+            continue
     if driver:
         driver.close()
 

@@ -15,9 +15,8 @@ def download(driver, symbol: str):
     """Get the list of holdings for Vanguard."""
 
     # Invesco actually has a direct link to the holdings page.
-    url = ('https://www.invesco.com'
-           '/portal/site/us/financial-professional/etfs/holdings/'
-           '?ticker={}'.format(symbol))
+    url = ("https://www.invesco.com/us/financial-products/etfs/product-detail"
+           "?productId=ETF-{}".format(symbol))
     logging.info("Opening %s", url)
     driver.get(url)
 

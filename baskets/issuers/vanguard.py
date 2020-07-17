@@ -6,7 +6,10 @@ __license__ = "GNU GPLv2"
 import logging
 import re
 import csv
+import time
 from typing import Dict
+
+from selenium.webdriver.common.keys import Keys
 
 from baskets import csv_utils
 from baskets import driverlib
@@ -24,12 +27,18 @@ def download(driver, symbol: str):
     logging.info("Opening %s", url)
     driver.get(url)
 
-    logging.info("Selecting Holding details")
-    element = retry(driver.find_element_by_link_text, "Holding details")
+
+    logging.info("Close popup")
+    login_form = retry(driver.find_element_by_xpath, "/html")
+    login_form.send_keys(Keys.ESCAPE)
+
+    logging.info("Selecting Portfolio")
+    element = retry(driver.find_element_by_link_text, "Portfolio")
     element.click()
 
-    logging.info("Selecting Export data")
-    element = retry(driver.find_element_by_link_text, "Export data")
+    logging.info("Selecting export returns data")
+    div = retry(driver.find_element_by_class_name, 'pdp-top-holdings')
+    element = div.find_element_by_tag_name("button")
     element.click()
 
     logging.info("Waiting for downloads")
