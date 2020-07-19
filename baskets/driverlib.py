@@ -52,7 +52,7 @@ def reset(driver):
 
 
 def retry(func, *args):
-    """Autoamtically retry a failed."""
+    """Automatically retry a failed."""
     while True:
         try:
             return func(*args)
