@@ -114,7 +114,7 @@ def main():
         else:
             downloader = issuers.get(row.issuer)
             if downloader is None:
-                message = "Missing issuer: {}".format(issuer)
+                message = "Missing issuer: {}".format(row.issuer)
                 if args.ignore_missing_issuer:
                     logging.error(message)
                     continue
