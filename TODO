@@ -1,3 +1,6 @@
+- Replace my unfinished table library by petl, which is nearly exactly what I
+  did, but properly.
+
 - Add sectors and currencies
 - Compute additional diversification measure
 - Download spreadsheet of strategies allocation (to csv) and evaluate and compare via join

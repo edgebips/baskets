@@ -1,3 +1,6 @@
+# TODO(blais): Kill this code, replace with petl, which is amazingly just that,
+# but done well and complete.
+
 """A simple row-based in-memory table representation and manipulation library.
 
 Think of this as a simpler, more functional, more predictable to use, much less
