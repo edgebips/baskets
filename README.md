@@ -1,9 +1,6 @@
-================================================================
-   baskets: ETF Holdings Downloader, Parser and Disaggregator
-================================================================
+# baskets: ETF Holdings Downloader, Parser and Disaggregator
 
-Introduction
---------------------
+## Introduction
 
 `baskets` is a project that provides Python library code that, given a list of
 Exchange Trade Funds and quantities, can
@@ -19,8 +16,7 @@ If you invest mostly with ETFs / baskets of stocks, it essentially answers the
 question: "What's my exposure to stock X?"
 
 
-Motivation
---------------------
+## Motivation
 
 You may be surprised that none of the brokers currently offer this service, and
 that automatically scraping the list of holdings from the issuers web pages is
@@ -32,15 +28,13 @@ etf.com, etfdb.com, etc.). I preferred to cook my own, since I had to write code
 on top anyway.
 
 
-Usage
---------------------
+## Usage
 
 Two Python scripts are provided for the two aforementioned tasks:
 `basksets-updatedb` and `baskets-portfolio`.
 
 
-Input Format
---------------------
+## Input Format
 
 The tools require you to provide your portfolio in order to provide it with a
 list of ETFs and their quantities. The input format is a CSV file with the
@@ -79,8 +73,7 @@ Here's an example input file::
   VNQ,Schwab,Vanguard,82.17,400
   VTI,Schwab,Vanguard,145.78,1235
 
-Installation
---------------------
+## Installation
 
 You need a recent Python-3 (at the time of writing this I've been developing
 using Python-3.7).
@@ -98,18 +91,18 @@ You will need to install the following Python libraries:
 
 You can install them like this:
 
-  python3 -m pip install -r requirements.txt
+    python3 -m pip install -r requirements.txt
 
 Install this package:
 
-  python3 -m pip install .
+   python3 -m pip install .
 
 Furthermore, you will need a WebDriver implementation for Selenium to control to
 fetch the holdings pages (from baskets-updatedb). You *need* the Chrome
 WebDriver, the others aren't guaranteed to work (I've witnessed the Firefox
 WebDriver fail on some pages, for example). Git it here:
 
-  https://sites.google.com/a/chromium.org/chromedriver/
+    https://sites.google.com/a/chromium.org/chromedriver/
 
 Untar the binary and install it under `/usr/loca/bin/chromedriver`.
 Alternatively, `baskets-updatedb` accepts the `--driver-exec=` option where you
