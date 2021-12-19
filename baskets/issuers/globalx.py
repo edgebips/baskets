@@ -3,40 +3,58 @@
 __author__ = 'Martin Blais <blais@furius.ca>'
 __license__ = "GNU GPLv2"
 
+import argparse
 import logging
+import re
 import time
 
 import requests
+import petl
+from selenium import webdriver
 
+from baskets import etl
 from baskets import driverlib
-from baskets.table import Table
-from baskets import table
 from baskets import utils
 
 
 def download(driver, symbol: str):
     """Get the list of holdings for Global X."""
-
-    # Note: This works too, but doesn't get us the default filename.
-    # resp = requests.get(url, params={'download_full_holdings': 'true'})
-
-    # Note: This somehow doesn't work in headless mode. I don't know why.
-
-    url = ('https://www.globalxfunds.com/funds/{}/'.format(symbol.lower()) +
-           '?download_full_holdings=true')
+    url = ('https://www.globalxetfs.com/funds/{}/?download_full_holdings=true'
+           .format(symbol.lower()))
     logging.info("Opening %s", url)
     driver.get(url)
+    files = driverlib.wait_for_downloads(driver.downloads_dir)
+    return files[0]
 
-    return driverlib.get_downloads(driver)
 
-
-def parse(filename: str) -> Table:
+def parse(filename: str) -> petl.Table:
     """Parse the holdings file."""
 
-    with open(filename) as infile:
-        next(infile)  # Title row
-        next(infile)  # Date tow
-        tbl = table.read_csv(infile)
+    table = (petl.fromcsv(filename)
+             .skip(1)
+             .skipcomments('Fund Holdings Data')
+             .skipcomments('The information contained herein')
+             .convert(['Market Price ($)', 'Shares Held', 'Market Value ($)'],
+                      etl.convert_number)
+             .rename({
+                 '% of Net Assets': 'pct_net_assets',
+                 'Ticker': 'symbol',
+                 'Name': 'name',
+                 'SEDOL': 'sedol',
+                 'Market Price ($)': 'price',
+                 'Shares Held': 'shares',
+                 'Market Value ($)': 'market_value',
+             })
+             )
+
+    total_market_value = table.values('market_value').sum()
+    table = (table
+             .addfield('fraction', lambda r: 100 * r.market_value / total_market_value)
+             )
+
+    total_fraction = table.values('fraction').sum()
+
+    return table
 
     # Compute market value.
     tbl = utils.create_fraction_from_market_value(tbl, 'market_value')
@@ -46,3 +64,19 @@ def parse(filename: str) -> Table:
 
     # Select what we got (not much).
     return tbl.select(['name', 'asstype', 'fraction'])
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format='%(levelname)-8s: %(message)s')
+    parser = argparse.ArgumentParser(description=__doc__.strip())
+    parser.add_argument('symbol', help='Name of ETF to download')
+    args = parser.parse_args()
+
+    driver = driverlib.create_driver("/snap/bin/chromium.chromedriver", headless=True)
+    filename = download(driver, args.symbol)
+    table = parse(filename)
+    print(table.lookallstr())
+
+
+if __name__ == '__main__':
+    main()
