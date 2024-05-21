@@ -1,5 +1,5 @@
 numpy==1.15.0
-requests==2.31.0
+requests==2.32.0
 selenium==3.14.0
 networkx==2.1
 pandas==0.23.4
